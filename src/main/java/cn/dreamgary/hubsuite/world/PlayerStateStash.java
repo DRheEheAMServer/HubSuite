@@ -10,10 +10,13 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,13 +59,16 @@ public final class PlayerStateStash {
         public ItemStack[] main = new ItemStack[36];
         public ItemStack[] armor = new ItemStack[4];
         public ItemStack[] offhand = new ItemStack[1];
+        public ItemStack[] enderChest = new ItemStack[27];
         public int selectedSlot;
         public int experienceLevel;
         public float experienceProgress;
         public int totalExperience;
         public float health;
+        public float absorptionAmount;
         public int foodLevel;
         public float saturation;
+        public List<MobEffectInstance> activeEffects = new ArrayList<>();
         public boolean initialized;
         /**
          * 玩家登出时骑着谁（实体 UUID 字符串）。
@@ -97,6 +103,8 @@ public final class PlayerStateStash {
             java.util.Arrays.fill(s.main, ItemStack.EMPTY);
             java.util.Arrays.fill(s.armor, ItemStack.EMPTY);
             java.util.Arrays.fill(s.offhand, ItemStack.EMPTY);
+            java.util.Arrays.fill(s.enderChest, ItemStack.EMPTY);
+            s.activeEffects.clear();
         }
     }
 
@@ -157,7 +165,8 @@ public final class PlayerStateStash {
     }
 
     private static String id(ResourceKey<Level> dimension) {
-        return dimension.identifier().toString();
+        ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+        return (canonical != null ? canonical : dimension).identifier().toString();
     }
 
     // ------------------------------------------------------------------
@@ -174,14 +183,23 @@ public final class PlayerStateStash {
             state.armor[i] = inv.getItem(36 + i).copy();
         }
         state.offhand[0] = inv.getItem(40).copy();
+        var ender = player.getEnderChestInventory();
+        for (int i = 0; i < 27 && i < ender.getContainerSize(); i++) {
+            state.enderChest[i] = ender.getItem(i).copy();
+        }
         state.selectedSlot = inv.getSelectedSlot();
 
         state.experienceLevel = player.experienceLevel;
         state.experienceProgress = player.experienceProgress;
         state.totalExperience = player.totalExperience;
         state.health = player.getHealth();
+        state.absorptionAmount = player.getAbsorptionAmount();
         state.foodLevel = player.getFoodData().getFoodLevel();
         state.saturation = player.getFoodData().getSaturationLevel();
+        state.activeEffects = new ArrayList<>();
+        for (MobEffectInstance effect : player.getActiveEffects()) {
+            state.activeEffects.add(new MobEffectInstance(effect));
+        }
         var vehicle = player.getVehicle();
         state.rootVehicleUuid = vehicle == null ? null : vehicle.getUUID().toString();
         state.initialized = true;
@@ -198,6 +216,10 @@ public final class PlayerStateStash {
             inv.setItem(36 + i, state.armor[i] == null ? ItemStack.EMPTY : state.armor[i].copy());
         }
         inv.setItem(40, state.offhand[0] == null ? ItemStack.EMPTY : state.offhand[0].copy());
+        var ender = player.getEnderChestInventory();
+        for (int i = 0; i < 27 && i < ender.getContainerSize(); i++) {
+            ender.setItem(i, state.enderChest[i] == null ? ItemStack.EMPTY : state.enderChest[i].copy());
+        }
         inv.setSelectedSlot(state.selectedSlot);
 
         // 光标上拿着的东西也清掉/恢复，避免"跨服携带"
@@ -207,13 +229,23 @@ public final class PlayerStateStash {
         player.experienceProgress = state.experienceProgress;
         player.totalExperience = state.totalExperience;
 
+        player.removeAllEffects();
         if (state.initialized) {
             player.setHealth(Math.max(1.0F, Math.min(state.health, player.getMaxHealth())));
+            player.setAbsorptionAmount(Math.max(0.0F, state.absorptionAmount));
             player.getFoodData().setFoodLevel(state.foodLevel);
             player.getFoodData().setSaturation(state.saturation);
+            if (state.activeEffects != null) {
+                for (MobEffectInstance effect : state.activeEffects) {
+                    if (effect != null) {
+                        player.addEffect(new MobEffectInstance(effect));
+                    }
+                }
+            }
         } else {
             // 全新状态：满血满饱食，避免一进新服就饿着
             player.setHealth(player.getMaxHealth());
+            player.setAbsorptionAmount(0.0F);
             player.getFoodData().setFoodLevel(20);
             player.getFoodData().setSaturation(5.0F);
             player.experienceLevel = 0;
@@ -235,7 +267,8 @@ public final class PlayerStateStash {
      */
     private static void persist(ServerPlayer player, ResourceKey<Level> dimension) {
         try {
-            var storage = PlayerDataRouter.storageForDimension(dimension);
+            ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+            var storage = PlayerDataRouter.storageForDimension(canonical != null ? canonical : dimension);
             if (storage == null) {
                 // 维度未托管（例如原版主世界）：没有对应存档，交给原版
                 return;
@@ -247,15 +280,9 @@ public final class PlayerStateStash {
         }
     }
 
-    /**
-     * 从该维度的玩家数据文件里读回状态。
-     *
-     * <p>只取"状态类"字段（背包/盔甲/副手/选中格/经验/血量/饱食），
-     * 位置、视角、维度这些**不碰** —— 落点由出生点解析器决定，
-     * 用这里的旧坐标会把玩家拽回上次的位置。
-     */
     private static State loadFromSave(ServerPlayer player, ResourceKey<Level> dimension) {
-        var storage = PlayerDataRouter.storageForDimension(dimension);
+        ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+        var storage = PlayerDataRouter.storageForDimension(canonical != null ? canonical : dimension);
         var server = player.level().getServer();
         if (storage == null || server == null) {
             return null;
@@ -292,13 +319,37 @@ public final class PlayerStateStash {
             }
         }
 
+        // 末影箱 0-26
+        var enderList = tag.getListOrEmpty("EnderItems");
+        for (int i = 0; i < enderList.size(); i++) {
+            CompoundTag itemTag = enderList.getCompoundOrEmpty(i);
+            int slot = itemTag.getIntOr("Slot", -1);
+            if (slot < 0 || slot >= 27) {
+                continue;
+            }
+            ItemStack stack = ItemStack.CODEC.parse(ops, itemTag)
+                    .result().orElse(ItemStack.EMPTY);
+            if (!stack.isEmpty()) {
+                state.enderChest[slot] = stack;
+            }
+        }
+
         state.selectedSlot = tag.getIntOr("SelectedItemSlot", 0);
         state.experienceLevel = tag.getIntOr("XpLevel", 0);
         state.experienceProgress = tag.getFloatOr("XpP", 0.0F);
         state.totalExperience = tag.getIntOr("XpTotal", 0);
         state.health = tag.getFloatOr("Health", player.getMaxHealth());
+        state.absorptionAmount = tag.getFloatOr("AbsorptionAmount", 0.0F);
         state.foodLevel = tag.getIntOr("foodLevel", 20);
         state.saturation = tag.getFloatOr("foodSaturationLevel", 5.0F);
+
+        var effectsList = tag.getListOrEmpty("active_effects");
+        for (int i = 0; i < effectsList.size(); i++) {
+            CompoundTag effectTag = effectsList.getCompoundOrEmpty(i);
+            MobEffectInstance.CODEC.parse(ops, effectTag)
+                    .result()
+                    .ifPresent(state.activeEffects::add);
+        }
         // RootVehicle 整块留着（原版 saveParentVehicle 写的）：Attach 是那个实体的 UUID，
         // Entity 是它的完整 NBT —— 原版断线时会清掉载具，只能靠这份 NBT 重建。
         CompoundTag rootVehicle = tag.getCompoundOrEmpty("RootVehicle");
@@ -406,6 +457,21 @@ public final class PlayerStateStash {
      */
     public static void forget(UUID uuid) {
         STASH.remove(uuid);
+    }
+
+    /** 重置玩家在指定维度的暂存状态与磁盘存档（用于 /island reset 防止刷开局物资）。 */
+    public static void resetDimension(ServerPlayer player, ResourceKey<Level> dimension) {
+        if (player == null || dimension == null) {
+            return;
+        }
+        String worldId = id(dimension);
+        State empty = State.empty();
+        STASH.computeIfAbsent(player.getUUID(), k -> new ConcurrentHashMap<>())
+                .put(worldId, empty);
+        if (player.level().dimension().equals(dimension)) {
+            write(player, empty);
+            persist(player, dimension);
+        }
     }
 
     public static void clear() {

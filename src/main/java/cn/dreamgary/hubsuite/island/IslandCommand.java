@@ -163,17 +163,17 @@ public final class IslandCommand {
             source.sendFailure(Component.literal("\u00A7c传送失败，请查看控制台。"));
             return 0;
         }
-        var island = service().islandAnywhere(player.getUUID()).orElse(null);
+        var type = service().type(typeId).orElse(null);
+        var island = type == null ? null : type.manager().islandOf(player.getUUID()).orElse(null);
         if (island == null) {
             source.sendSuccess(() -> Component.literal("\u00A7a已传送到你的岛。"), false);
             return 1;
         }
-        var type = service().type(island.type).orElse(null);
-        String typeName = type == null ? island.type
-                : cn.dreamgary.hubsuite.ui.Text.stripColors(
-                        type.manager().config().type(island.type).displayName);
+        String typeName = cn.dreamgary.hubsuite.ui.Text.stripColors(
+                type.manager().config().type(typeId).displayName);
+        String coord = type.manager().anchorOf(island).toShortString();
         source.sendSuccess(() -> Component.literal(
-                "\u00A7a已进入你的" + typeName + " \u00A77(方格 " + island.plotX + ", " + island.plotZ + ")"), false);
+                "\u00A7a已进入你的" + typeName + " \u00A77(" + coord + ")"), false);
         return 1;
     }
 
@@ -289,6 +289,11 @@ public final class IslandCommand {
         return 1;
     }
 
+    private static final java.util.Map<String, Long> RESET_CONFIRMS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, Long> RESET_COOLDOWNS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /** 重置我的某种岛（清地形重建，谨慎）。 */
     private int reset(CommandSourceStack source, String typeId) {
         ServerPlayer player;
@@ -312,8 +317,42 @@ public final class IslandCommand {
             source.sendFailure(Component.literal("\u00A7c你还没有" + typeId + "岛，没什么可重置的。"));
             return 0;
         }
+
+        String key = player.getUUID() + ":" + typeId;
+        long now = System.currentTimeMillis();
+        int cooldownSec = Math.max(0, manager.config().resetCooldownSeconds);
+        boolean admin = permissions != null && permissions.hasAdminPermission(player);
+        if (cooldownSec > 0 && !admin) {
+            Long lastReset = RESET_COOLDOWNS.get(key);
+            if (lastReset != null) {
+                long remainSec = (lastReset + cooldownSec * 1000L - now + 999L) / 1000L;
+                if (remainSec > 0) {
+                    source.sendFailure(Component.literal(
+                            "\u00A7c重置冷却中，还需等待 \u00A7f" + remainSec + "\u00A7c 秒。"));
+                    return 0;
+                }
+            }
+        }
+
+        Long confirmAt = RESET_CONFIRMS.get(key);
+        if (confirmAt == null || now - confirmAt > 15_000L) {
+            RESET_CONFIRMS.put(key, now);
+            source.sendFailure(Component.literal(
+                    "\u00A7e⚠ 重置将清空你的\u00A7f" + typeId + "\u00A7e岛地形与该维度背包！"
+                            + "请在 15 秒内再次输入 \u00A7f/island reset " + typeId + "\u00A7e 确认。"));
+            return 0;
+        }
+        RESET_CONFIRMS.remove(key);
+        RESET_COOLDOWNS.put(key, now);
+
         // 先送出这个维度，否则地形清空时人就站在空气里了
         service.sendToHub(player);
+        // 清空该岛屿维度的位置记忆与背包状态，防止借重置无限刷开局物资
+        if (cn.dreamgary.hubsuite.HubSuite.rulesEngine() != null) {
+            cn.dreamgary.hubsuite.HubSuite.rulesEngine().forget(
+                    player.getUUID(), type.entry().dimension().identifier().toString());
+        }
+        cn.dreamgary.hubsuite.world.PlayerStateStash.resetDimension(player, type.entry().dimension());
         manager.delete(player.getUUID());
         manager.getOrCreate(player.getUUID(), player.getName().getString(), type.id());
         source.sendSuccess(() -> Component.literal(

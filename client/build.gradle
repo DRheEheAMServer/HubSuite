@@ -25,7 +25,8 @@ sourceSets {
  */
 def clientFingerprint = providers.provider {
 	def digest = java.security.MessageDigest.getInstance('SHA-256')
-	def files = (fileTree('src/main/java') + fileTree('src/main/resources')
+	def javaTree = fileTree('src/main/java') { exclude '**/Dev*.java' }
+	def files = (javaTree + fileTree('src/main/resources')
 			+ fileTree('../common/src/main/java') + fileTree('../common/resources')).files
 	// 用**相对路径**参与哈希：绝对路径会让指纹随 checkout 位置变化（审计指出的问题）
 	def entries = files.collect { [project.relativePath(it).replace(File.separator, '/'), it] }
@@ -57,18 +58,17 @@ dependencies {
 }
 
 processResources {
-	def props = [
-		version      : project.version,
-		fingerprint  : clientFingerprint.get(),
-		loaderVersion: project.loader_version,
-		mcVersion    : project.minecraft_version
-	]
-	inputs.properties props
-	filesMatching('fabric.mod.json') {
-		expand props
-	}
-	filesMatching('hubsuite-client.properties') {
-		expand props
+	inputs.property 'version', project.version
+	inputs.property 'fingerprint', clientFingerprint
+	inputs.property 'loaderVersion', project.loader_version
+	inputs.property 'mcVersion', project.minecraft_version
+	filesMatching(['fabric.mod.json', 'hubsuite-client.properties']) {
+		expand([
+			version      : project.version,
+			fingerprint  : clientFingerprint.get(),
+			loaderVersion: project.loader_version,
+			mcVersion    : project.minecraft_version
+		])
 	}
 }
 
@@ -84,6 +84,7 @@ java {
 }
 
 jar {
+	exclude '**/Dev*.class'
 	from(rootProject.file('LICENSE')) {
 		rename { "${it}_${project.base.archivesName.get()}" }
 	}

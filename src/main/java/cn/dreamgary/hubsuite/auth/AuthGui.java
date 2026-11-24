@@ -52,6 +52,9 @@ public final class AuthGui {
     public static void openFor(ServerPlayer player, AuthService service, AuthManager manager) {
         String username = player.getName().getString();
         service.isRegisteredAsync(username, registered -> {
+            if (player.hasDisconnected()) {
+                return;
+            }
             HubSuite.logger().info("为 {} 弹出{}表单（账号{}存在）。",
                     username,
                     registered ? "登录" : "注册",

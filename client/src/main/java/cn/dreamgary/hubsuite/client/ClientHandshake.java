@@ -39,7 +39,7 @@ public final class ClientHandshake {
                     HubSuiteClient.version(),
                     HubSuiteClient.fingerprint(),
                     CAPS);
-            context.client().execute(() -> ClientPlayNetworking.send(ack));
+            context.responseSender().sendPacket(ack);
         });
 
         ClientPlayNetworking.registerGlobalReceiver(HandshakePayloads.Welcome.TYPE, (payload, context) ->

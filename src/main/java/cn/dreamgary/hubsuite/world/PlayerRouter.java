@@ -143,7 +143,9 @@ public final class PlayerRouter {
         // 用 id 比较会跳过暂存，玩家在大厅里捡的东西一到岛上就没了（实测）。
         boolean dimensionChanged = !player.level().dimension().equals(level.dimension());
         if (from != null && dimensionChanged) {
-            // 把当前状态（背包/经验/血量）按"离开的场所"暂存起来。
+            // 切服前先关闭打开中的容器（工作台/箱子/装配台等），防止带着光标或容器格跨服
+            player.closeContainer();
+            // 把当前状态（背包/末影箱/药水/经验/血量）按"离开的场所"暂存起来。
             // 不做这一步的话，玩家会背着自己的东西跨服 —— 实测表现为
             // "生存服攒的物品被带到大厅来了"。
             // 按**维度**暂存，而不是按场所：空岛服有大厅/经典/海岛三个维度，

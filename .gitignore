@@ -12,9 +12,9 @@ out/
 .project
 
 # 运行目录（真实服务端测试环境，由开发者本地生成）
-run/
-logs/
+run/*
 !run/mods/
+logs/
 
 # 本地依赖 jar（体积大，不入版本库；请按 docs/安装部署.md 自行放置）
 mods/
@@ -26,8 +26,7 @@ libs/
 # IDE / build output
 bin/
 
-# �ͻ���/����˱������ã�PCL �汾����Ŀ¼��Ķ���������Դ�룩
+# 本地工具与客户端/服务端本地配置（非源码）
+.dsh-mc/
 config/
-run/
 client/run/
-

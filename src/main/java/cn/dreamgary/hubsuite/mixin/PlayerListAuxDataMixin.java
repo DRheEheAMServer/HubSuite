@@ -10,13 +10,13 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.stats.ServerStatsCounter;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.storage.LevelResource;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -65,36 +65,31 @@ public abstract class PlayerListAuxDataMixin implements PlayerListAuxAccess {
         }
     }
 
-    /** 统计：进入解析前登记"当前是哪个玩家"。 */
-    @Inject(method = "getPlayerStats", at = @At("HEAD"))
-    private void hubsuite$enterStats(Player player, CallbackInfoReturnable<ServerStatsCounter> cir) {
-        // 传**维度**而不是 UUID：玩家加入过程中还没进玩家列表，
-        // 靠 UUID 反查会查不到，导致重定向失效、数据落回全局路径。
+    /** 统计：进入解析前登记"当前是哪个玩家"，finally 确保异常时也清理上下文。 */
+    @WrapMethod(method = "getPlayerStats")
+    private ServerStatsCounter hubsuite$wrapStats(Player player, Operation<ServerStatsCounter> original) {
         AuxDataRouter.setContext(player == null ? null : player.level().dimension());
         if (player instanceof ServerPlayer sp) {
             AuxDataRouter.logResolvedDirs(sp, sp.level().dimension());
         }
+        try {
+            return original.call(player);
+        } finally {
+            AuxDataRouter.clearContext();
+        }
     }
 
-    @Inject(method = "getPlayerStats", at = @At("RETURN"))
-    private void hubsuite$exitStats(Player player, CallbackInfoReturnable<ServerStatsCounter> cir) {
-        AuxDataRouter.clearContext();
-    }
-
-    /** 成就：同样把目录换掉。这个方法本身拿得到玩家，直接设上下文即可。 */
-    @Inject(method = "getPlayerAdvancements", at = @At("HEAD"))
-    private void hubsuite$enterAdvancements(ServerPlayer player,
-                                            CallbackInfoReturnable<PlayerAdvancements> cir) {
-        // 传**维度**而不是 UUID：玩家加入过程中还没进玩家列表，
-        // 靠 UUID 反查会查不到，导致重定向失效、数据落回全局路径。
+    /** 成就：同样把目录换掉，finally 确保异常时也清理上下文。 */
+    @WrapMethod(method = "getPlayerAdvancements")
+    private PlayerAdvancements hubsuite$wrapAdvancements(ServerPlayer player,
+                                                          Operation<PlayerAdvancements> original) {
         AuxDataRouter.setContext(player == null ? null : player.level().dimension());
         AuxDataRouter.logResolvedDirs(player, player == null ? null : player.level().dimension());
-    }
-
-    @Inject(method = "getPlayerAdvancements", at = @At("RETURN"))
-    private void hubsuite$exitAdvancements(ServerPlayer player,
-                                           CallbackInfoReturnable<PlayerAdvancements> cir) {
-        AuxDataRouter.clearContext();
+        try {
+            return original.call(player);
+        } finally {
+            AuxDataRouter.clearContext();
+        }
     }
 
     @ModifyExpressionValue(
@@ -134,6 +129,7 @@ public abstract class PlayerListAuxDataMixin implements PlayerListAuxAccess {
             PlayerAdvancements adv = this.advancements.remove(uuid);
             if (adv != null) {
                 adv.save();
+                adv.stopListening();
                 handled++;
             }
         } catch (Throwable t) {

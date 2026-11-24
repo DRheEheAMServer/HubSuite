@@ -1,0 +1,8 @@
+{
+  "item.hubsuite.nether_string": "Nether String",
+  "item.hubsuite.wooden_fishing_bucket": "Wooden Fishing Bucket",
+  "item.hubsuite.iron_fishing_bucket": "Iron Fishing Bucket",
+  "item.hubsuite.diamond_fishing_bucket": "Diamond Fishing Bucket",
+  "block.hubsuite.assembly_table": "Rod Assembly Table",
+  "itemGroup.hubsuite.main": "HubSuite"
+}

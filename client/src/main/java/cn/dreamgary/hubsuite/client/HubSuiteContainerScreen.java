@@ -42,9 +42,9 @@ public class HubSuiteContainerScreen<T extends AbstractContainerMenu> extends Ab
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractBackground(graphics, mouseX, mouseY, partialTick);
         drawPanel(graphics, mouseX, mouseY);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     /** 点中布局里的按钮 → 给服务端发 {@code UiActionPayload}（装配 = 消耗材料生效）。 */
@@ -109,7 +109,8 @@ public class HubSuiteContainerScreen<T extends AbstractContainerMenu> extends Ab
                 int boxX = x + preview.x();
                 int boxY = y + preview.y();
                 int boxSize = (int) (16 * preview.scale());
-                if (mouseX >= boxX && mouseX < boxX + boxSize
+                if (hoveredSlot == null
+                        && mouseX >= boxX && mouseX < boxX + boxSize
                         && mouseY >= boxY && mouseY < boxY + boxSize) {
                     g.setTooltipForNextFrame(font, stack, mouseX, mouseY);
                 }

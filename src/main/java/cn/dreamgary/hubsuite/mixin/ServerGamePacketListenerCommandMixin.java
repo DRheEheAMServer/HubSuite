@@ -10,8 +10,8 @@ import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.suggestion.Suggestions;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.LastSeenMessages;
 import net.minecraft.network.protocol.game.ClientboundCommandSuggestionsPacket;
-import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
 import net.minecraft.network.protocol.game.ServerboundCommandSuggestionPacket;
 import net.minecraft.server.MinecraftServer;
@@ -39,13 +39,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerGamePacketListenerImpl.class)
 public abstract class ServerGamePacketListenerCommandMixin {
 
-    @Inject(method = "handleChatCommand", at = @At("HEAD"), cancellable = true)
-    private void hubsuite$guardUnsigned(ServerboundChatCommandPacket packet, CallbackInfo ci) {
-        hubsuite$preprocess(packet.command(), ci);
+    @Inject(method = "performUnsignedChatCommand", at = @At("HEAD"), cancellable = true)
+    private void hubsuite$guardUnsigned(String command, CallbackInfo ci) {
+        hubsuite$preprocess(command, ci);
     }
 
-    @Inject(method = "handleSignedChatCommand", at = @At("HEAD"), cancellable = true)
-    private void hubsuite$guardSigned(ServerboundChatCommandSignedPacket packet, CallbackInfo ci) {
+    @Inject(method = "performSignedChatCommand", at = @At("HEAD"), cancellable = true)
+    private void hubsuite$guardSigned(ServerboundChatCommandSignedPacket packet,
+                                      LastSeenMessages lastSeenMessages,
+                                      CallbackInfo ci) {
         hubsuite$preprocess(packet.command(), ci);
     }
 
@@ -68,8 +70,9 @@ public abstract class ServerGamePacketListenerCommandMixin {
                     return;
                 }
             } catch (Throwable t) {
-                // fail-closed：闸门自己出错时必须拒绝
-                HubSuite.logger().error("命令闸门异常，已按拒绝处理 /{}", command, t);
+                // fail-closed：闸门自己出错时必须拒绝（只记录命令头，避免泄露 /login 等参数里的密码）
+                String head = command.split(" ", 2)[0];
+                HubSuite.logger().error("命令闸门异常，已按拒绝处理 /{}", head, t);
                 player.sendSystemMessage(Component.literal(
                         "\u00A7c指令校验出错，已阻止执行，请联系管理员查看控制台。"));
                 ci.cancel();
@@ -88,7 +91,7 @@ public abstract class ServerGamePacketListenerCommandMixin {
                 ci.cancel();
             }
         } catch (Throwable t) {
-            HubSuite.logger().error("改写家命令失败 /{}", command, t);
+            HubSuite.logger().error("改写家命令失败 /{}", command.split(" ", 2)[0], t);
         }
     }
 
@@ -98,7 +101,11 @@ public abstract class ServerGamePacketListenerCommandMixin {
      * <p>必须先改写请求：HuskHomes 存的是 {@code 1_s1}，玩家打 {@code s} 时
      * 原版补全是拿 {@code s} 去匹配 {@code 1_s1} 的，匹配不上就没提示。
      */
-    @Inject(method = "handleCustomCommandSuggestions", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "handleCustomCommandSuggestions",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/server/level/ServerLevel;)V",
+                    shift = At.Shift.AFTER),
+            cancellable = true)
     private void hubsuite$cleanSuggestions(ServerboundCommandSuggestionPacket packet, CallbackInfo ci) {
         ServerPlayer player = ((ServerGamePacketListenerImpl) (Object) this).player;
         if (player == null) {

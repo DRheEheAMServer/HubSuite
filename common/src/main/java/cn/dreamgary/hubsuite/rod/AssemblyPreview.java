@@ -38,6 +38,7 @@ public final class AssemblyPreview {
         }
         ItemStack preview = rod.copy();
         next.writeTo(preview);
+        next.applyVanillaBar(preview);
         return preview;
     }
 

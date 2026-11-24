@@ -4,7 +4,9 @@
 	"package": "cn.dreamgary.hubsuite.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"MenuScreensMixin"
+		"MenuScreensMixin",
+		"ClientFishingHookMixin",
+		"ClientEntityLavaHurtMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

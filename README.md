@@ -97,7 +97,7 @@
 /island ocean               去海岛
 /island home                回上次那种岛
 /island info                我的岛信息
-/island reset [类型]        重置我的岛（清归属重建，谨慎）
+/island reset <类型>        重置我的岛（含冷却与二次确认，清背包与地形，谨慎）
 
 /register <密码> <确认密码>  认证兜底注册
 /login <密码>               认证兜底登录

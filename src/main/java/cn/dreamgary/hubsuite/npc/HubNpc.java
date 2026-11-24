@@ -143,10 +143,13 @@ public final class HubNpc {
             return false;
         }
 
-        GameProfile profile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(npcName), npcName);
+        GameProfile profile = new GameProfile(java.util.UUID.randomUUID(), npcName);
 
         // 皮肤：先用缓存里的（同步），没有就先光着，等异步拉回来再重生一次
-        SkinFetcher.cached(config.skin == null ? "" : config.skin)
+        String skinKey = "auto".equalsIgnoreCase(config.skin)
+                ? npcName
+                : (config.skin == null ? "" : config.skin);
+        SkinFetcher.cached(skinKey)
                 .ifPresent(skin -> SkinFetcher.apply(profile, skin));
 
         ClientInformation info = new ClientInformation(

@@ -99,9 +99,7 @@ public final class Text {
         }
 
         // 单段文本时直接把带样式的 literal 返回。
-        // 不要用 `(MutableComponent) result.getSiblings().get(0)` 强转 ——
-        // 那样虽然不抛异常，却会把样式丢掉（实测：颜色值变成 null）。
-        if (result.getSiblings().size() == 1 && result.getContents().toString().isEmpty()) {
+        if (result.getSiblings().size() == 1) {
             Component only = result.getSiblings().get(0);
             if (only instanceof MutableComponent mutable) {
                 return mutable;
@@ -137,7 +135,7 @@ public final class Text {
             case 'o' -> style.withItalic(true);
             default -> {
                 TextColor color = TextColor.parseColor("#" + legacyHex(code)).result().orElse(null);
-                yield color == null ? style : style.withColor(color);
+                yield color == null ? style : Style.EMPTY.withColor(color);
             }
         };
     }

@@ -102,6 +102,9 @@ public final class IslandConfig {
     /** 首次进入空岛服是否自动分配并生成一座岛。 */
     public boolean autoCreateOnFirstJoin = true;
 
+    /** 重置岛屿冷却秒数（默认 1800 秒 = 30 分钟；<= 0 表示不限制）。 */
+    public int resetCooldownSeconds = 1800;
+
     /** 默认岛型 id。 */
     public String defaultType = "classic";
 

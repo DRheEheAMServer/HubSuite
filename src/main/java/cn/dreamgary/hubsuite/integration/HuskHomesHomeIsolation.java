@@ -145,10 +145,11 @@ public final class HuskHomesHomeIsolation {
             return;
         }
         Object target = call(teleport, "getTarget");
-        if (target == null || !homeClass.isInstance(target)) {
-            return;   // 只管"回家"，不管 tpa / warp / spawn
+        if (target == null) {
+            return;
         }
-        if (isForeign(target, call(teleport, "getExecutor"), "回家")) {
+        String action = homeClass != null && homeClass.isInstance(target) ? "回家" : "传送";
+        if (isForeign(target, call(teleport, "getExecutor"), action)) {
             cancel(event);
         }
     }
@@ -169,17 +170,17 @@ public final class HuskHomesHomeIsolation {
         }
     }
 
-    /** 家不在玩家当前子服 → 提示并返回 true（调用方负责取消事件）。 */
-    private static boolean isForeign(Object home, Object commandUser, String action) {
+    /** 目标（家或任意 Position）不在玩家当前场所 → 提示并返回 true（调用方负责取消事件）。 */
+    private static boolean isForeign(Object target, Object commandUser, String action) {
         Optional<String> here = placeOfUser(commandUser);
-        Optional<String> owner = placeOfHome(home);
+        Optional<String> owner = placeOfHome(target);
         if (here.isEmpty() || owner.isEmpty() || owner.get().equals(here.get())) {
             return false;
         }
         ServerPlayer player = playerOf(commandUser);
         if (player != null) {
-            notify(player, "\u00A7c这个家属于子服 \u00A7f" + owner.get()
-                    + "\u00A7c，请在那边" + action + "。");
+            notify(player, "\u00A7c目标位置属于场所 \u00A7f" + owner.get()
+                    + "\u00A7c，跨服请使用 \u00A7f/hub\u00A7c（不能在这里直接" + action + "）。");
         }
         return true;
     }

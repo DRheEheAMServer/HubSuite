@@ -77,37 +77,58 @@ public final class HuskHomesIntegration {
         return apiReady();
     }
 
+    private record CachedCount(int count, long fetchedAt) {
+    }
+
+    private final java.util.Map<java.util.UUID, CachedCount> homeCountCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<java.util.UUID> homeCountFetching =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     /**
-     * 取玩家的家数量。
-     *
-     * <p>HuskHomes 的 {@code getUserHomes} 返回 {@code CompletableFuture}，
-     * 这里同步等待并加了超时保护 —— 它内部走数据库，正常在毫秒级返回。
+     * 取玩家的家数量（非阻塞读缓存，过期时后台异步刷新，绝不阻塞服务端主线程）。
      */
     public Optional<Integer> homeCount(ServerPlayer player) {
-        if (!apiReady()) {
+        if (!apiReady() || player == null) {
             return Optional.empty();
         }
-        try {
-            Object api = getInstance.invoke(null);
-            Object user = adaptUser(api, player);
-            if (user == null) {
-                return Optional.empty();
-            }
-            Method getUserHomes = Class
-                    .forName("net.william278.huskhomes.api.BaseHuskHomesAPI")
-                    .getMethod("getUserHomes",
-                            Class.forName("net.william278.huskhomes.user.User"));
-            Object future = getUserHomes.invoke(api, user);
-            if (future instanceof CompletableFuture<?> cf) {
-                Object homes = cf.get(3, java.util.concurrent.TimeUnit.SECONDS);
-                if (homes instanceof List<?> list) {
-                    return Optional.of(list.size());
+        java.util.UUID uuid = player.getUUID();
+        long now = System.currentTimeMillis();
+        CachedCount cached = homeCountCache.get(uuid);
+        if (cached == null || now - cached.fetchedAt() > 5_000L) {
+            if (homeCountFetching.add(uuid)) {
+                try {
+                    Object api = getInstance.invoke(null);
+                    Object user = adaptUser(api, player);
+                    if (user == null) {
+                        homeCountFetching.remove(uuid);
+                    } else {
+                        Method getUserHomes = Class
+                                .forName("net.william278.huskhomes.api.BaseHuskHomesAPI")
+                                .getMethod("getUserHomes",
+                                        Class.forName("net.william278.huskhomes.user.User"));
+                        Object future = getUserHomes.invoke(api, user);
+                        if (future instanceof CompletableFuture<?> cf) {
+                            cf.whenComplete((homes, err) -> {
+                                try {
+                                    if (err == null && homes instanceof List<?> list) {
+                                        homeCountCache.put(uuid, new CachedCount(list.size(), System.currentTimeMillis()));
+                                    }
+                                } finally {
+                                    homeCountFetching.remove(uuid);
+                                }
+                            });
+                        } else {
+                            homeCountFetching.remove(uuid);
+                        }
+                    }
+                } catch (Throwable t) {
+                    homeCountFetching.remove(uuid);
+                    HubSuite.logger().debug("读取 HuskHomes 家数量失败：{}", t.toString());
                 }
             }
-        } catch (Throwable t) {
-            HubSuite.logger().debug("读取 HuskHomes 家数量失败：{}", t.toString());
         }
-        return Optional.empty();
+        return cached == null ? Optional.empty() : Optional.of(cached.count());
     }
 
     private Object adaptUser(Object api, ServerPlayer player) {

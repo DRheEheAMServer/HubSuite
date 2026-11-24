@@ -105,6 +105,11 @@
         }
       ]
     },
-    "on_false": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod" }
+    "on_false": {
+      "type": "minecraft:condition",
+      "property": "minecraft:fishing_rod/cast",
+      "on_true": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod_cast" },
+      "on_false": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod" }
+    }
   }
 }

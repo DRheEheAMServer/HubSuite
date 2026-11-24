@@ -36,8 +36,8 @@ public final class ClientItems {
                 REGISTERED.add(def);
             }
         } catch (Throwable t) {
-            HubSuiteClient.LOGGER.error("注册真物品失败（这些物品在客户端会显示成空气）：{}", t.toString());
-            return;
+            HubSuiteClient.LOGGER.error("注册真物品失败", t);
+            throw new IllegalStateException("HubSuite client item registration failed", t);
         }
         List<String> paths = new ArrayList<>();
         for (HubSuiteItemDefs.Def def : REGISTERED) {
@@ -90,6 +90,9 @@ public final class ClientItems {
             for (var m : cn.dreamgary.hubsuite.rod.RodMaterials.lines()) {
                 rodFiles.add("assets/hubsuite/models/item/rod/line_" + m.id() + ".json");
                 rodFiles.add("assets/hubsuite/textures/item/rod/line_" + m.id() + ".png");
+                // 抛竿时的线层
+                rodFiles.add("assets/hubsuite/models/item/rod/line_" + m.id() + "_cast.json");
+                rodFiles.add("assets/hubsuite/textures/item/rod/line_" + m.id() + "_cast.png");
             }
             for (var m : cn.dreamgary.hubsuite.rod.RodMaterials.hooks()) {
                 rodFiles.add("assets/hubsuite/models/item/rod/hook_" + m.id() + ".json");
@@ -98,12 +101,21 @@ public final class ClientItems {
             for (var m : cn.dreamgary.hubsuite.rod.RodMaterials.upgrades()) {
                 rodFiles.add("assets/hubsuite/models/item/rod/up_" + m.id() + ".json");
                 rodFiles.add("assets/hubsuite/textures/item/rod/up_" + m.id() + ".png");
+                // 抛竿态 / 盖上（未抛竿）态
+                rodFiles.add("assets/hubsuite/models/item/rod/up_" + m.id() + "_cast.json");
+                rodFiles.add("assets/hubsuite/textures/item/rod/up_" + m.id() + "_cast.png");
+                rodFiles.add("assets/hubsuite/models/item/rod/up_" + m.id() + "_cover.json");
+                rodFiles.add("assets/hubsuite/textures/item/rod/up_" + m.id() + "_cover.png");
             }
-            rodFiles.add("assets/hubsuite/models/item/rod/unknown.json");
-            rodFiles.add("assets/hubsuite/textures/item/rod/unknown.png");
-            // 抛竿时的钓线层 + 耐久见底的裂纹层
-            rodFiles.add("assets/hubsuite/models/item/rod/cast_line.json");
-            rodFiles.add("assets/hubsuite/textures/item/rod/cast_line.png");
+            // 没有材质时的兜底层：0.6 起按部位拆成 杆/线/钩 三张，不再共用一张 unknown
+            // （这里原来还在查 unknown / cast_line，是美术改版前的旧名字，误报过一阵）
+            rodFiles.add("assets/hubsuite/models/item/rod/unknown_rod.json");
+            rodFiles.add("assets/hubsuite/textures/item/rod/unknown_rod.png");
+            rodFiles.add("assets/hubsuite/models/item/rod/unknown_line.json");
+            rodFiles.add("assets/hubsuite/textures/item/rod/unknown_line.png");
+            rodFiles.add("assets/hubsuite/models/item/rod/unknown_hook.json");
+            rodFiles.add("assets/hubsuite/textures/item/rod/unknown_hook.png");
+            // 耐久见底的裂纹层
             rodFiles.add("assets/hubsuite/models/item/rod/broken_crack.json");
             rodFiles.add("assets/hubsuite/textures/item/rod/broken_crack.png");
             for (String path : rodFiles) {

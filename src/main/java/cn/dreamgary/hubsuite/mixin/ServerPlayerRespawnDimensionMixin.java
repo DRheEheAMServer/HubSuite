@@ -72,29 +72,26 @@ public abstract class ServerPlayerRespawnDimensionMixin {
             if (target == null) {
                 return;
             }
-            boolean sameDim = target.dimension().equals(here.dimension());
-            if (sameDim && !t.missingRespawnBlock()) {
-                return;   // 正常路径（床/锚），不动
+            var hereDim = here.dimension();
+            var expectedHome = cn.dreamgary.hubsuite.world.PortalLinks.parentOverworld(hereDim);
+            if (expectedHome == null) {
+                expectedHome = hereDim;
             }
-            /*
-             * 走到这里有两种情况，都要纠正：
-             *   ① 跨维度（兜底读了被覆盖的共享出生点 → 串到别的子服）；
-             *   ② 同维度但 missingRespawnBlock（兜底位置可能是虚空）。
-             * 位置一律改用"该子服自己登记的出生点"，拿不到才退回维度 respawnData。
-             */
-            if (!sameDim) {
+            boolean validSameWorld = target.dimension().equals(hereDim)
+                    || target.dimension().equals(expectedHome);
+            if (validSameWorld && !t.missingRespawnBlock()) {
+                return;   // 正常路径（床/锚，或从下界/末地回到归属主维度），不动
+            }
+            ServerLevel safeLevel = here.getServer() != null ? here.getServer().getLevel(expectedHome) : null;
+            if (safeLevel == null) {
+                safeLevel = here;
+            }
+            if (!validSameWorld) {
                 HubSuite.logger().info("重生兜底维度已纠正：{} -> {}（共享出生点数据被覆盖导致的串服）",
-                        target.dimension().identifier(), here.dimension().identifier());
+                        target.dimension().identifier(), safeLevel.dimension().identifier());
             }
-            /*
-             * 落点必须优先用**玩家自己的重生点**（RespawnPoints.bind 绑的"他的岛"）。
-             * 原来的实现只在"子服主维度"里找出生点，而多维度子服的主维度恒是那个
-             * 虚空世界 —— 海岛/经典空岛都匹配不上，于是退到维度的 respawnData
-             * （海岛 = 海中央），玩家一死就重生在海里（用户实测：
-             * "海岛服的重生点似乎不在自己的岛上"）。
-             */
-            var pos = cn.dreamgary.hubsuite.world.RespawnPoints.pickSafePos(self, here, t.position());
-            var fixed = new TeleportTransition(here, pos, Vec3.ZERO,
+            var pos = cn.dreamgary.hubsuite.world.RespawnPoints.pickSafePos(self, safeLevel, t.position());
+            var fixed = new TeleportTransition(safeLevel, pos, Vec3.ZERO,
                     t.yRot(), t.xRot(), t.relatives(), t.postTeleportTransition());
             cir.setReturnValue(fixed);
         } catch (Throwable e) {

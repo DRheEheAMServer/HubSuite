@@ -113,14 +113,24 @@ public final class ServerRulesEngine {
     // ------------------------------------------------------------------
 
     private void checkVoid(net.minecraft.server.MinecraftServer server) {
+        var islands = HubSuite.islands();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             PlayableWorld world = worlds.worldOf(player).orElse(null);
             if (world == null) {
                 continue;
             }
             double floor = player.level().getMinY() - 8.0;
+            if (islands != null && islands.typeOf(player.level()).map(t -> !"ocean".equals(t.id())).orElse(false)) {
+                floor = Math.max(floor, islands.config().voidY);
+            }
             if (player.getY() < floor) {
+                var dimId = player.level().dimension().identifier().toString();
+                if (islands != null && islands.handleVoidFall(player)) {
+                    forget(player.getUUID(), dimId);
+                    continue;
+                }
                 PlayerRouter.sendTo(player, world);
+                forget(player.getUUID(), dimId);
                 player.sendSystemMessage(Component.literal("\u00A7e你掉出了世界，已送回出生点。"));
             }
         }
@@ -162,6 +172,12 @@ public final class ServerRulesEngine {
      * </ol>
      */
     private void onRespawn(ServerPlayer oldPlayer, ServerPlayer newPlayer, boolean alive) {
+        if (alive) {
+            return;   // 从末地返回泉水等存活传送，不覆盖落点
+        }
+        if (newPlayer.getRespawnConfig() != null) {
+            return;   // 玩家已有有效床/重生锚，尊重原版重生点
+        }
         PlayableWorld world = worlds.worldOf(oldPlayer).orElse(null);
         if (!(world instanceof SubServer sub) || !sub.config().rememberLastLocation) {
             return;
@@ -259,6 +275,12 @@ public final class ServerRulesEngine {
         if (sub.config().rememberLastLocation && dimension != null) {
             double[] spot = recall(player.getUUID(), dimension.identifier().toString());
             if (spot != null && spot.length >= 5) {
+                var level = sub.level().getServer() != null
+                        ? sub.level().getServer().getLevel(dimension) : null;
+                if (level != null && spot[1] < level.getMinY() + 4) {
+                    HubSuite.logger().debug("记忆坐标 Y={} 低于安全底线，忽略并回落出生点", spot[1]);
+                    return null;
+                }
                 return new cn.dreamgary.hubsuite.world.PlayableWorld.SpawnPoint(
                         spot[0], spot[1], spot[2], (float) spot[3], (float) spot[4]);
             }
@@ -285,7 +307,15 @@ public final class ServerRulesEngine {
             }
             HubSuite.logger().info("已载入位置记忆：{} 名玩家。", memory.size());
         } catch (Exception e) {
-            HubSuite.logger().warn("载入位置记忆失败：{}", e.toString());
+            HubSuite.logger().warn("载入位置记忆失败（已尝试备份损坏文件）：{}", e.toString());
+            try {
+                if (Files.exists(memoryFile)) {
+                    Path backup = memoryFile.resolveSibling(
+                            memoryFile.getFileName() + ".corrupt-" + System.currentTimeMillis());
+                    Files.move(memoryFile, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception ignored) {
+            }
         }
     }
 

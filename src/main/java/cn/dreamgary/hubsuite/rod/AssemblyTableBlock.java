@@ -66,17 +66,27 @@ public class AssemblyTableBlock extends BaseEntityBlock {
         if (level.isClientSide()) {
             return InteractionResult.SUCCESS;
         }
-        // 用户定的：钓竿系统只限空岛服（别的服打不开）
+        // 钓竿系统只限海岛服
         if (!RodScope.allowed(level)) {
             if (player instanceof ServerPlayer sp) {
-                sp.sendSystemMessage(Component.literal("\u00A77钓竿装配台只能在空岛服使用。"));
+                sp.sendSystemMessage(Component.literal("\u00A77钓竿装配台只能在海岛服使用。"));
             }
             return InteractionResult.CONSUME;
         }
         if (player instanceof ServerPlayer serverPlayer
                 && level.getBlockEntity(pos) instanceof AssemblyBlockEntity table) {
+            // 兼容旧存档里遗留的方块实体物品：打开时自动退回给玩家
+            for (int i = 0; i < AssemblyBlockEntity.INPUT_SIZE; i++) {
+                ItemStack leftover = table.removeItemNoUpdate(i);
+                if (!leftover.isEmpty() && !serverPlayer.getInventory().add(leftover)) {
+                    serverPlayer.drop(leftover, false);
+                }
+            }
+            table.setChanged();
+            var sessionParts = new net.minecraft.world.SimpleContainer(AssemblyBlockEntity.INPUT_SIZE);
+            var access = net.minecraft.world.inventory.ContainerLevelAccess.create(level, pos);
             serverPlayer.openMenu(new SimpleMenuProvider(
-                    (containerId, inventory, p) -> new AssemblyMenu(containerId, inventory, table),
+                    (containerId, inventory, p) -> new AssemblyMenu(containerId, inventory, sessionParts, access),
                     Component.literal("钓竿装配台")));
         }
         return InteractionResult.CONSUME;

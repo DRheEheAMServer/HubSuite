@@ -20,6 +20,7 @@ public final class DevShot {
 
     private static Object lastScreen;
     private static int ticks;
+    private static boolean captured;
 
     private DevShot() {
     }
@@ -30,18 +31,19 @@ public final class DevShot {
             if (!(screen instanceof HubSuiteContainerScreen<?>)) {
                 lastScreen = null;
                 ticks = 0;
+                captured = false;
                 return;
             }
             if (screen != lastScreen) {
                 lastScreen = screen;
                 ticks = 0;
+                captured = false;
                 return;
             }
-            if (++ticks != 20) {
+            if (captured || ++ticks != 20) {
                 return;
             }
-            ticks = 0;
-            lastScreen = screen;   // 一张界面只截一次（置 null 会每 21 tick 又截一张）
+            captured = true;
             capture(client, dir, "gui");
         });
     }

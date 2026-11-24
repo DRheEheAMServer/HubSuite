@@ -28,8 +28,10 @@ public final class ClientRodTooltip {
             }
             lines.addAll(RodTooltip.summary(data));
             // 菜单打开时 KeyMapping.isDown() 不可靠（收不到按键状态），直接问窗口的物理按键
-            var window = net.minecraft.client.Minecraft.getInstance().getWindow();
-            boolean shift = com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            var window = mc.getWindow();
+            boolean shift = mc.options.keyShift.isDown()
+                    || com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,
                     org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT)
                     || com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,
                     org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT);

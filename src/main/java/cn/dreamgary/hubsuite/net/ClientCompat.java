@@ -92,6 +92,8 @@ public final class ClientCompat {
     public void register() {
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Hello.TYPE, HandshakePayloads.Hello.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Welcome.TYPE, HandshakePayloads.Welcome.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(
+                LavaHookSyncPayload.LavaHookSync.TYPE, LavaHookSyncPayload.LavaHookSync.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayloads.HelloAck.TYPE, HandshakePayloads.HelloAck.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayloads.HelloAck.TYPE, this::onAck);

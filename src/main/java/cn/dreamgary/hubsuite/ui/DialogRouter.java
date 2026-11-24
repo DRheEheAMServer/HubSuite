@@ -214,6 +214,9 @@ public final class DialogRouter {
             authService.loginAsync(username, player.getUUID(), password,
                     AuthService.ipOf(player.connection.getRemoteAddress()),
                     result -> {
+                        if (player.hasDisconnected()) {
+                            return;
+                        }
                         if (result.ok()) {
                             DialogKit.close(player);
                             AuthGui.forget(player.getUUID());
@@ -235,6 +238,9 @@ public final class DialogRouter {
             authService.registerAsync(username, player.getUUID(), password, confirm,
                     AuthService.ipOf(player.connection.getRemoteAddress()),
                     result -> {
+                        if (player.hasDisconnected()) {
+                            return;
+                        }
                         if (result.ok()) {
                             DialogKit.close(player);
                             AuthGui.forget(player.getUUID());

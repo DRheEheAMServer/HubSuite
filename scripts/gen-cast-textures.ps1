@@ -1,4 +1,4 @@
-# Generate derived textures for rod layers (never touches the source art).
+﻿# Generate derived textures for rod layers (never touches the source art).
 #
 #   line_<id>_cast.png  = line_<id>.png  minus mask
 #   up_<id>_cover.png   = up_<id>.png with binarised alpha (any pixel -> fully opaque)
@@ -11,7 +11,8 @@
 Add-Type -AssemblyName System.Drawing
 
 $dir = Join-Path $PSScriptRoot "..\client\src\main\resources\assets\hubsuite\textures\item\rod"
-$universal = Join-Path $dir "cast_string.png"
+$srcDir = Join-Path $PSScriptRoot "assets\rod"
+$universal = Join-Path $srcDir "cast_string.png"
 $THRESHOLD = 8
 
 function Get-Mask($base) {
@@ -48,7 +49,7 @@ foreach ($f in (Get-ChildItem $dir -Filter "line_*.png" | Where-Object { $_.Name
     Write-Out $f (Join-Path $dir ($f.BaseName + "_cast.png")) $false $m
     if ($null -ne $m) { $m.Dispose() }
 }
-foreach ($f in (Get-ChildItem $dir -Filter "up_*.png" | Where-Object { $_.Name -notlike "*_cast.png" -and $_.Name -notlike "*_cover.png" })) {
+foreach ($f in (Get-ChildItem $srcDir -Filter "up_*.png" | Where-Object { $_.Name -notlike "*_cast.png" -and $_.Name -notlike "*_cover.png" })) {
     Write-Out $f (Join-Path $dir ($f.BaseName + "_cover.png")) $true $null
     $m = Get-Mask $f.BaseName
     Write-Out $f (Join-Path $dir ($f.BaseName + "_cast.png")) $true $m

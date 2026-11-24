@@ -115,6 +115,9 @@ public final class HubSuite implements ModInitializer {
         // 装配台（0.5.0 先做菜单与界面，0.6 方块化）
         cn.dreamgary.hubsuite.rod.AssemblyTable.register();
 
+        // 创造模式标签页：物品不归入任何标签页，创造模式物品栏与 JEI 里都会找不到
+        cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.register();
+
         // 未登录锁定 + 命令闸门 + 权限
         permissions = new cn.dreamgary.hubsuite.feature.PermissionService();
         lockdown = new cn.dreamgary.hubsuite.feature.LoginLockdown(worldsManager, authManager);
@@ -238,6 +241,19 @@ public final class HubSuite implements ModInitializer {
         hubCommand.register();
         // 自检里"等世界生成"的项靠每 tick 推进 —— 不能在主线程上等，会卡到看门狗强杀
         HubCommand.registerSelfTestPump();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK
+                .register(cn.dreamgary.hubsuite.ui.ChestMenuScreen::tick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            if (questManager != null) {
+                questManager.saveIfDirty();
+            }
+            if (authService != null) {
+                authService.shutdown();
+            }
+            if (npcManager != null) {
+                npcManager.despawnAll();
+            }
+        });
         cn.dreamgary.hubsuite.command.MenuCommand.register();
         new cn.dreamgary.hubsuite.command.AuthCommand(worldsManager, authService, authManager).register();
 

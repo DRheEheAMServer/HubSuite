@@ -338,8 +338,11 @@ public class BaitBucketItem extends net.minecraft.world.item.Item {
     public boolean overrideStackedOnOther(ItemStack bucket, Slot slot, ClickAction action, Player player) {
         ItemStack inSlot = slot.getItem();
         if (!inSlot.isEmpty()) {
-            // 桶点饵 → 装入（左键全装、右键装一个）
-            if (FishingBait.isBait(inSlot.getItem()) && slot.mayPickup(player)) {
+            // 仅拦截"钓饵"格；非钓饵格放行原版交换位置
+            if (!FishingBait.isBait(inSlot.getItem())) {
+                return false;
+            }
+            if (slot.allowModification(player)) {
                 int moved = insert(bucket, inSlot, action == ClickAction.PRIMARY
                         ? Integer.MAX_VALUE : 1);
                 if (moved > 0) {
@@ -349,7 +352,6 @@ public class BaitBucketItem extends net.minecraft.world.item.Item {
                     playInsertFailSound(player);
                 }
             }
-            // 格子不是空的就吃掉这次点击（原版收纳袋同语义）
             return true;
         }
         // 桶右键点空格子 → 取一组放进那格

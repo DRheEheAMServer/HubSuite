@@ -35,7 +35,7 @@ public final class HubSuiteItems {
      */
     /** 遗留：0.5 的熔岩钓竿（不再产出，只为老存档里的旧竿还在）。 */
     public static Item LAVA_ROD;
-    /** 渔桶：钓饵的收纳袋（容量 16 / 64 / 1024）。 */
+    /** 渔桶：钓饵的收纳袋（容量 64 / 256 / 1024）。 */
     public static Item WOODEN_FISHING_BUCKET;
     public static Item IRON_FISHING_BUCKET;
     public static Item DIAMOND_FISHING_BUCKET;

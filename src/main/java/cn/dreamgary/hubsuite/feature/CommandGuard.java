@@ -79,14 +79,14 @@ public final class CommandGuard {
             return Component.literal("\u00A7c请先完成注册或登录，当前只能用 \u00A7f/login \u00A7c/register \u00A7c/hub\u00A7c。");
         }
 
-        // ---- 2. HuskHomes 传送指令的子服开关 ----
+        // ---- 2. HuskHomes 传送指令的子服/大厅开关 ----
         if (HUSKHOMES_TELEPORT.contains(name)) {
             PlayableWorld current = worlds.worldOf(player).orElse(null);
-            if (current instanceof SubServer currentSub
-                    && !currentSub.config().huskhomesTeleport
-                    && !permissions.hasAdminPermission(player)) {
+            boolean blocked = current instanceof cn.dreamgary.hubsuite.world.Lobby
+                    || (current instanceof SubServer currentSub && !currentSub.config().huskhomesTeleport);
+            if (blocked && !permissions.hasAdminPermission(player)) {
                 return Component.literal(
-                        "\u00A7c本服务器禁用了传送指令，请用 \u00A7f/hub \u00A7c返回大厅后再前往其他服务器。");
+                        "\u00A7c当前场所禁用了传送指令，请用 \u00A7f/hub \u00A7c或菜单切换服务器。");
             }
         }
 
@@ -95,11 +95,9 @@ public final class CommandGuard {
         if (world instanceof SubServer sub && CREATIVE_BLOCKED.contains(name)) {
             boolean allowed = sub.config().allowGameModeCommand && "gamemode".equals(name);
             if (!allowed && !permissions.hasBuildPermission(player)) {
-                if (!sub.config().allowGameModeCommand || !"gamemode".equals(name)) {
-                    return Component.literal(
-                            "\u00A7c该服务器不允许直接使用 \u00A7f/" + name + "\u00A7c。"
-                                    + "\u00A77创造模式请找管理员授权，或使用 mod 提供的功能。");
-                }
+                return Component.literal(
+                        "\u00A7c该服务器不允许直接使用 \u00A7f/" + name + "\u00A7c。"
+                                + "\u00A77创造模式请找管理员授权，或使用 mod 提供的功能。");
             }
         }
         return null;

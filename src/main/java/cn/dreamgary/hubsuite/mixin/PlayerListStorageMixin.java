@@ -2,6 +2,8 @@ package cn.dreamgary.hubsuite.mixin;
 
 import cn.dreamgary.hubsuite.world.PlayerDataRouter;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
@@ -9,9 +11,6 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.storage.PlayerDataStorage;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Optional;
 
@@ -50,25 +49,24 @@ public abstract class PlayerListStorageMixin {
         return routed != null ? routed : original;
     }
 
-    @Inject(method = "save(Lnet/minecraft/server/level/ServerPlayer;)V", at = @At("HEAD"))
-    private void hubsuite$enterSave(ServerPlayer player, CallbackInfo ci) {
+    @WrapMethod(method = "save(Lnet/minecraft/server/level/ServerPlayer;)V")
+    private void hubsuite$wrapSave(ServerPlayer player, Operation<Void> original) {
         PlayerDataRouter.enter(player);
+        try {
+            original.call(player);
+        } finally {
+            PlayerDataRouter.exit();
+        }
     }
 
-    @Inject(method = "save(Lnet/minecraft/server/level/ServerPlayer;)V", at = @At("RETURN"))
-    private void hubsuite$exitSave(ServerPlayer player, CallbackInfo ci) {
-        PlayerDataRouter.exit();
-    }
-
-    @Inject(method = "loadPlayerData", at = @At("HEAD"))
-    private void hubsuite$enterLoad(NameAndId nameAndId,
-                                    CallbackInfoReturnable<Optional<CompoundTag>> cir) {
+    @WrapMethod(method = "loadPlayerData")
+    private Optional<CompoundTag> hubsuite$wrapLoad(NameAndId nameAndId,
+                                                    Operation<Optional<CompoundTag>> original) {
         PlayerDataRouter.enterLoad(nameAndId.id());
-    }
-
-    @Inject(method = "loadPlayerData", at = @At("RETURN"))
-    private void hubsuite$exitLoad(NameAndId nameAndId,
-                                   CallbackInfoReturnable<Optional<CompoundTag>> cir) {
-        PlayerDataRouter.exitLoad();
+        try {
+            return original.call(nameAndId);
+        } finally {
+            PlayerDataRouter.exitLoad();
+        }
     }
 }

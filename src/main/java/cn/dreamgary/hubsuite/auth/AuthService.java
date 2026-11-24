@@ -133,8 +133,13 @@ public final class AuthService {
      * 表现为"进服后要愣几秒才弹窗"。
      */
     public void isRegisteredAsync(String username, java.util.function.Consumer<Boolean> callback) {
-        CompletableFuture.supplyAsync(() -> isRegistered(username), worker)
-                .thenAccept(registered -> scheduler.execute(() -> callback.accept(registered)));
+        try {
+            CompletableFuture.supplyAsync(() -> isRegistered(username), worker)
+                    .thenAccept(registered -> scheduler.execute(() -> callback.accept(registered)));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            HubSuite.logger().warn("账号查询队列已满（{}），暂按未登录提示处理：{}", username, e.toString());
+            scheduler.execute(() -> callback.accept(false));
+        }
     }
 
     /** 后台校验密码，结果回到服务端线程。 */
@@ -177,7 +182,7 @@ public final class AuthService {
             return false;
         }
         return store.sessionIp(uuid, now)
-                .map(saved -> saved.isEmpty() || saved.equals(ip))
+                .map(saved -> !saved.isEmpty() && saved.equals(ip))
                 .orElse(false);
     }
 
@@ -272,6 +277,9 @@ public final class AuthService {
         }
         if (newPassword == null || newPassword.length() < config.minPasswordLength) {
             return Result.of(Status.WEAK_PASSWORD, "密码至少 " + config.minPasswordLength + " 位。");
+        }
+        if (newPassword.length() > config.maxPasswordLength) {
+            return Result.of(Status.WEAK_PASSWORD, "密码最多 " + config.maxPasswordLength + " 位。");
         }
         String hash = PasswordHasher.hash(newPassword, config.pbkdf2Iterations);
         if (!store.updatePassword(username, hash)) {

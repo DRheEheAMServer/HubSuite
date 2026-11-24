@@ -70,21 +70,57 @@ public abstract class PortalBlockDestinationMixin {
                 return original;
             }
             ResourceKey<Level> targetKey = vanillaTarget.dimension();
-            // 只在下界/末地这两个写死的目标上做手脚，其它一律不动
-            if (!Level.NETHER.equals(targetKey) && !Level.END.equals(targetKey)) {
+            // 只对下界/末地/主世界返回做重定向，其它一律不动
+            if (!Level.NETHER.equals(targetKey)
+                    && !Level.END.equals(targetKey)
+                    && !Level.OVERWORLD.equals(targetKey)) {
                 return original;
             }
-            boolean targetIsNether = Level.NETHER.equals(targetKey);
             ResourceKey<Level> redirected = PortalLinks.redirect(fromLevel.dimension(), targetKey);
-            if (redirected == null || redirected.equals(targetKey)) {
+            if (redirected == null) {
+                // 受管维度尝试跳往未启用的原版下界/末地 → 取消传送，防止跨服逃逸
+                return null;
+            }
+            if (redirected.equals(targetKey)) {
                 return original;   // 没登记 / 不需要改
             }
             ServerLevel destination = PortalLinks.levelOf(fromLevel.getServer(), redirected);
             if (destination == null) {
-                // 目标维度没造出来（配置关掉或构造失败）→ 保留原版行为，
-                // 总比把玩家送进一个不存在的维度好。
                 return original;
             }
+
+            // 末地传送门（进末地黑曜石平台 / 从末地返回子服主维度）：绝不调用 PortalForcer 建下界门
+            if ((Object) this instanceof EndPortalBlock) {
+                if (Level.END.equals(targetKey)) {
+                    BlockPos platform = ServerLevel.END_SPAWN_POINT;
+                    net.minecraft.world.level.levelgen.feature.EndPlatformFeature
+                            .createEndPlatform(destination, platform.below(), true);
+                    Vec3 pos = Vec3.atBottomCenterOf(platform);
+                    return new TeleportTransition(
+                            destination,
+                            pos,
+                            Vec3.ZERO,
+                            net.minecraft.core.Direction.WEST.toYRot(),
+                            0.0F,
+                            Relative.union(Relative.DELTA, Relative.ROTATION),
+                            original.postTeleportTransition());
+                }
+                // 从子服末地跳入返回泉水 → 回到子服主维度的玩家重生点（或世界出生点）
+                if (entity instanceof net.minecraft.server.level.ServerPlayer sp) {
+                    return sp.findRespawnPositionAndUseSpawnBlock(false, original.postTeleportTransition());
+                }
+                BlockPos spawnPos = destination.getRespawnData().pos();
+                return new TeleportTransition(
+                        destination,
+                        Vec3.atBottomCenterOf(spawnPos),
+                        Vec3.ZERO,
+                        original.yRot(),
+                        original.xRot(),
+                        Relative.union(Relative.DELTA, Relative.ROTATION),
+                        original.postTeleportTransition());
+            }
+
+            boolean targetIsNether = Level.NETHER.equals(targetKey);
 
             /*
              * 坐标换算：**必须自己按"当前维度 ↔ 实际目标维度"重算**，

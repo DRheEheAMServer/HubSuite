@@ -71,7 +71,7 @@ public final class HubSuiteItemDefs {
                 .component(DataComponents.ITEM_NAME, def.name())
                 // 遗留别名没有自己的素材，模型直接指回原版钓竿（两端一致，素材检查会跳过它们）
                 .component(DataComponents.ITEM_MODEL,
-                        isLegacyAlias(def) ? Identifier.withDefaultNamespace("item/fishing_rod") : def.id());
+                        isLegacyAlias(def) ? Identifier.withDefaultNamespace("fishing_rod") : def.id());
         if (def.durability() > 0) {
             props = props.durability(def.durability());
         }

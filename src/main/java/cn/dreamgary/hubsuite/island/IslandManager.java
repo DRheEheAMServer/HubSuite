@@ -686,9 +686,6 @@ public final class IslandManager {
                     for (int dz = -radius; dz <= radius; dz++) {
                         var pos = center.offset(dx, dy, dz);
                         BlockState state = level.getBlockState(pos);
-                        if (state.isAir()) {
-                            continue;
-                        }
                         if (target.is(Blocks.WATER)
                                 && !state.getFluidState().isEmpty()) {
                             continue;   // 已经是水，别重复写
@@ -1095,7 +1092,7 @@ public final class IslandManager {
         double p2 = rng.nextDouble() * Math.PI * 2;
         double p3 = rng.nextDouble() * Math.PI * 2;
 
-        int outer = radius + OCEAN_SKIRT_RINGS;
+        int outer = (int) Math.ceil(radius + OCEAN_SHORE_WOBBLE_MAX + OCEAN_SKIRT_RINGS);
         int dry = 0;
         int shelf = 0;
         long started = System.currentTimeMillis();
@@ -1427,8 +1424,16 @@ public final class IslandManager {
 
     /** 把方块 id 编码成一个 int（高位是注册表 id），避免在配置里存对象。 */
     private int parseBlockId(String id) {
+        if (id == null || id.isBlank()) {
+            return -1;
+        }
+        var parsed = net.minecraft.resources.Identifier.tryParse(id.trim());
+        if (parsed == null) {
+            HubSuite.logger().warn("非法的方块 id：{}", id);
+            return -1;
+        }
         var registry = level.getServer().registryAccess().lookupOrThrow(Registries.BLOCK);
-        var key = ResourceKey.create(Registries.BLOCK, net.minecraft.resources.Identifier.parse(id));
+        var key = ResourceKey.create(Registries.BLOCK, parsed);
         return registry.get(key).map(h -> registry.getId(h.value())).orElse(-1);
     }
 
@@ -1459,13 +1464,24 @@ public final class IslandManager {
                     amount = 1;
                 }
             }
-            var key = ResourceKey.create(Registries.ITEM, net.minecraft.resources.Identifier.parse(id));
+            var parsed = net.minecraft.resources.Identifier.tryParse(id.trim());
+            if (parsed == null) {
+                HubSuite.logger().warn("岛型 {} 的物资 '{}' id 非法，已忽略。", type.id, id);
+                continue;
+            }
+            var key = ResourceKey.create(Registries.ITEM, parsed);
             Item item = registry.get(key).map(h -> h.value()).orElse(null);
             if (item == null || item == Items.AIR) {
                 HubSuite.logger().warn("岛型 {} 的物资 '{}' 不存在，已忽略。", type.id, id);
                 continue;
             }
-            result.add(new ItemStack(item, Math.min(amount, item.getDefaultMaxStackSize() * 4)));
+            int maxStack = Math.max(1, item.getDefaultMaxStackSize());
+            int remaining = Math.min(amount, maxStack * 4);
+            while (remaining > 0) {
+                int part = Math.min(remaining, maxStack);
+                result.add(new ItemStack(item, part));
+                remaining -= part;
+            }
         }
         return result;
     }
@@ -1498,14 +1514,25 @@ public final class IslandManager {
             }
             HubSuite.logger().info("已载入空岛归属：{} 座。", islands.size());
         } catch (Exception e) {
-            HubSuite.logger().error("载入空岛归属失败", e);
+            HubSuite.logger().error("载入空岛归属失败（已尝试备份损坏文件）：{}", storeFile, e);
+            backupCorruptFile(storeFile);
+        }
+    }
+
+    private static void backupCorruptFile(Path file) {
+        try {
+            if (Files.exists(file)) {
+                Path backup = file.resolveSibling(file.getFileName() + ".corrupt-" + System.currentTimeMillis());
+                Files.move(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception ignored) {
         }
     }
 
     public void save() {
         try {
             Files.createDirectories(storeFile.getParent());
-            Path tmp = storeFile.resolveSibling("islands.json.tmp");
+            Path tmp = storeFile.resolveSibling(storeFile.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
                 GSON.toJson(islands, writer);
             }

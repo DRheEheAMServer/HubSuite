@@ -24,7 +24,11 @@ public abstract class ServerGamePacketListenerMenuMixin {
     @Shadow
     public ServerPlayer player;
 
-    @Inject(method = "handleContainerClick", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "handleContainerClick",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/server/level/ServerLevel;)V",
+                    shift = At.Shift.AFTER),
+            cancellable = true)
     private void hubsuite$handleMenuClick(ServerboundContainerClickPacket packet, CallbackInfo ci) {
         if (player == null) {
             return;

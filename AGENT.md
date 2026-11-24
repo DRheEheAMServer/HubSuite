@@ -3,14 +3,14 @@
 > 本文件是**长期有效的工作约定 + 项目现状**：怎么搭环境、怎么改、怎么验、什么不能做，
 > 以及关键代码地图、踩坑记录与未验证清单。
 >
-> 项目由人类作者与 AI Agent 协作开发，详见 [README.md](README.md) 的「AI 参与声明」。
+> 项目由人类作者与 AI Agent 协作开发，详见 [README.md](README.md) 的「关于」。
 
 ---
 
 ## 一、动手前必读
 
 1. **先读 git 日志**（`git log`）—— 当前版本、已验证 / 未验证清单与待办都记录在提交历史里。
-   动手前把本文件的「七、环境坑」「八、排查手法」「十、Mixin 约定」看一遍，很多坑踩一次要花几小时。
+   动手前把本文件的「六、环境坑」「七、排查手法」「九、Mixin 约定与清单」看一遍，很多坑踩一次要花几小时。
 2. **说话用中文**（作者是中文用户）。
 3. **不要声称验证过没验证的东西**。没验就明说「未验证」。这是本项目最重要的一条约定 ——
    作者会亲手实测，虚报会被当场抓到，而且会浪费他更多时间。
@@ -19,8 +19,8 @@
 
 ## 二、项目速览
 
-**HubSuite** —— Minecraft **26.1.2** 的**纯服务端** Fabric 模组（Java 25），
-把一个服务端变成「大厅 + 多个互相独立的子服」（生存 / 创造 / 空岛）。
+**HubSuite** —— Minecraft **26.1.2** 的**双端配套** Fabric 模组（Java 25），
+把一台服务端变成「大厅 + 多个互相独立的子服」（生存 / 创造 / 空岛），配套客户端模组 `hubsuite-client` 提供真物品、分层钓竿渲染与装配台界面。
 
 | 项 | 值 |
 |---|---|
@@ -28,8 +28,8 @@
 | 版本 | `gradle.properties` 的 `server_version` = **0.5.0-SNAPSHOT**；客户端 `client_version` 独立递增（见 docs/分发与更新.md） |
 | 构建 | Gradle 9.7.1 + Loom 1.18-SNAPSHOT |
 | 映射 | **官方 Mojang 名，不 remap**（26.1 起官方不再混淆；build.gradle 无 mappings、无 remapJar） |
-| 产物 | `build/libs/hubsuite-<版本>.jar`（另有 `-sources.jar`） |
-| 规模 | 服务端 125 个 Java 文件 / 31 个 Mixin；共用 12 个（`common/`，双端各编译一份）；客户端 8 个（含 1 个 mixin）；自检约 270 项 |
+| 产物 | `build/libs/hubsuite-<版本>.jar`（服务端）与 `client/build/libs/hubsuite-client-<版本>.jar`（客户端） |
+| 规模 | 服务端 127 个 Java 文件 / 31 个 Mixin；共用 17 个（`common/`，双端各编译一份）；客户端 15 个（含 3 个 mixin）；自检约 270 项 |
 
 ### 架构要点（改之前必须理解）
 
@@ -38,8 +38,7 @@
 - 所有自定义维度用 **`hubsuite:` 自有 key**，不占用 `minecraft:overworld` 等原版 key
 - 软依赖（运行时探测，缺失要能降级）：LuckPerms / HuskHomes / Placeholder API / fabric-permissions-api / JEI
   - **JEI 服务端没有可调用的 API**：它的插件接口（IModPlugin）只在客户端加载，所以 JeiIntegration
-    只做探测 + 记录，不引用 JEI 的类；客户端 JEI 的配方页数据走原版配方同步（我们的配方全是
-    shaped/shapeless，物品由 Polymer 改写 SlotDisplay/Ingredient），配方转移由服务端 JEI 通用处理
+    只做探测 + 记录，不引用 JEI 的类；自定义物品已作为真物品在两端注册，客户端 JEI 可直接查看物品与配方。
 - **客户端强制安装**（0.6 收尾起）：自定义物品在两端都注册真 id，对齐交给 Fabric 的注册表同步；
   **没装客户端的玩家会被注册表同步直接断开**（这就是强制安装的实现，不依赖自研开关）。
   Polymer 与资源包下发**已整体下线**，build.gradle 里没有任何 Polymer 依赖。
@@ -67,7 +66,7 @@ $env:JAVA_HOME = $j; $env:PATH = "$j\bin;$env:PATH"
 > ⚠️ 构建必须能读写 `~/.gradle`。文件沙箱只给 workspace 写权限时会失败在
 > wrapper 锁文件上（`FileNotFoundException ... .zip.lck (Operation not permitted)`）。
 > 另外 `maven.fabricmc.net` 很慢，Loom 首次拉取可能 `Read timed out`；可重试，
-> 或用 `curl -C -` 断点续传补齐缓存（缓存路径见「九」）。
+> 或用 `curl -C -` 断点续传补齐缓存（本地 Gradle 缓存位于 `~/.gradle/caches/fabric-loom/`）。
 
 ### 起测试服务端
 
@@ -111,9 +110,7 @@ $env:JAVA_HOME = $j; $env:PATH = "$j\bin;$env:PATH"
 - 🔴 **跑完务必关掉客户端窗口**：它开着就一直占 Gradle 的构建锁，
   再跑任何 Gradle 任务（包括服务端自检）都会卡在等锁上。
 - **自动连服（开发用）**：`:client:runClientAuto` 带 `-Dhubsuite.autoconnect=localhost:25566`，
-  客户端初始加载结束就自动连本机测试服（先起服务端）。手动用 `:client:runClient` 也可以，
-  但进服时**必须接受服务器资源包**（Polymer 下发的那个），否则会卡在配置阶段直到掉线 ——
-  自动连服这条路会自己选"启用"。
+  客户端初始加载结束就自动连本机测试服（先起服务端）。手动用 `:client:runClient` 也可以。
 - 原版的 `--quickPlayMultiplayer` 在 26.1 上实测**不生效**（参数进了命令行也不连），
   所以自动连服是本模组自己实现的（`DevAutoConnect`）。
 - **开发模式下客户端会自动注册/登录**（`hubsuite-dev`），并关掉登录期间残留的对话框 ——
@@ -319,7 +316,7 @@ if (level.getChunkSource().getChunkNow(cx, cz) == null) { /* 登记待办，下�
 
 ---
 
-## 九、Mixin 约定与清单（22 个）
+## 九、Mixin 约定与清单（服务端 31 个 + 客户端 3 个）
 
 ### 约定（都踩过坑）
 
@@ -366,9 +363,20 @@ if (level.getChunkSource().getChunkNow(cx, cz) == null) { /* 登记待办，下�
 | Mixin | 作用 |
 |---|---|
 | `ServerCommonPacketListenerMixin` | 接收对话框表单提交（`handleCustomClickAction`） |
-| `ServerGamePacketListenerCommandMixin` | 命令闸门（Fabric 无「命令即将执行」事件） |
+| `ServerGamePacketListenerCommandMixin` | 命令闸门与家命令命名空间改写 |
 | `ServerGamePacketListenerMenuMixin` | 接管箱子式菜单点击 |
 | `BlockItemPlaceMixin` | 任务精确统计「放置方块」（真的放下才计数） |
+| `CommonPlayerSpawnInfoMixin` | 客户端维度 key 伪装（让光影识别自定义下界/末地） |
+| `FishingHookAccessor` / `FishingHookMixin` / `FishingHookLootMixin` | 岩浆钓鱼物理、粒子、耐烧灼与按群系分池渔获 |
+| `FishingRodCastMixin` / `EntityLavaHurtMixin` / `RodDurabilityMixin` | 断竿拦截、岩浆钩同步与自定义耐久接管 |
+| `AnvilRodUpgradeMixin` / `ItemCombinerMenuAccessor` | 铁砧钓竿升级与经验花费 |
+
+### 客户端 Mixin（3 个）
+
+| Mixin | 作用 |
+|---|---|
+| `MenuScreensMixin` | 拦截 `AssemblyMenu` 构建客户端 `HubSuiteContainerScreen` |
+| `ClientFishingHookMixin` / `ClientEntityLavaHurtMixin` | 客户端岩浆浮标物理同步与免火表现 |
 
 ---
 
@@ -505,7 +513,7 @@ release 的**提交信息、tag message、release notes** 都是给**使用者�
 
 **已锁定的需求与决策（不要再改）**：
 
-- 目标版本严格锁定 MC 26.1.2；纯服务端 Fabric 模组；单个服务端 + 每子服独立存档
+- 目标版本严格锁定 MC 26.1.2；服务端 + `hubsuite-client` 双端配套 Fabric 模组；单个服务端 + 每子服独立存档
 - 包名 / mod id：`cn.dreamgary.hubsuite` / `hubsuite`
 - 离线服务器（`online-mode=false`），但正版与离线都要注册 + 登录
 - 登录用对话框表单（`TextInput` + `CustomAll` 静默回传）+ PBKDF2 加盐 + SQLite；密码不进聊天 / 命令 / 日志

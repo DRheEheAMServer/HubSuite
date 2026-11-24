@@ -29,21 +29,24 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$env:JAVA_HOME = "$env:USERPROFILE\scoop\apps\openjdk25\current"
-$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+if (-not $env:JAVA_HOME) {
+    $scoopJdk = "$env:USERPROFILE\scoop\apps\openjdk25\current"
+    if (Test-Path $scoopJdk) {
+        $env:JAVA_HOME = $scoopJdk
+        $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+    }
+}
 
 # 清掉强杀遗留的会话锁，否则服务端拒绝启动
 Get-ChildItem run -Recurse -Filter "session.lock" -ErrorAction SilentlyContinue | Remove-Item -Force
 $logPath = Join-Path $root $LogFile
 New-Item -ItemType Directory -Force -Path (Split-Path $logPath) | Out-Null
 
-# 命令文件：ping 占位延时（cmd 没有 sleep），然后逐条命令，最后 stop
+# 命令文件仅写游戏命令与 stop（服务端控制台把每一行都当 MC 命令，不能放 ping/注释）
 $cmdFile = Join-Path $root "run\console-commands.txt"
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add("ping -n $($StartupDelaySec + 1) 127.0.0.1 > nul")
 foreach ($c in $Commands) {
     $lines.Add($c)
-    $lines.Add("ping -n 4 127.0.0.1 > nul")
 }
 $lines.Add("stop")
 # 服务端控制台用平台默认字符集读 stdin（简中 Windows = GBK），

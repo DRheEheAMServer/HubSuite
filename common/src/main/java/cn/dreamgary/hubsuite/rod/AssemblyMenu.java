@@ -9,7 +9,9 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -53,33 +55,39 @@ public class AssemblyMenu extends AbstractContainerMenu {
     }
 
     private final Container parts;
+    private final ResultContainer result = new ResultContainer();
+    private final ContainerLevelAccess access;
     private final Player player;
 
     /** 客户端按 menuType 建菜单时走这个构造：格子内容由服务端同步过来。 */
     public AssemblyMenu(int containerId, Inventory playerInventory) {
-        this(containerId, playerInventory, new SimpleContainer(AssemblyBlockEntity.SIZE));
+        this(containerId, playerInventory, new SimpleContainer(AssemblyBlockEntity.INPUT_SIZE),
+                ContainerLevelAccess.NULL);
     }
 
-    /** 方块打开的走这个：格子直接架在**方块实体**上（关界面前东西留在世界里）。 */
+    /** 演示命令（/rod demo）等无物理方块的虚拟容器构造。 */
     public AssemblyMenu(int containerId, Inventory playerInventory, Container parts) {
+        this(containerId, playerInventory, parts, ContainerLevelAccess.NULL);
+    }
+
+    /** 方块打开的走这个：每玩家独立输入容器 + 方块距离校验，防止多人偷物或隔空操作。 */
+    public AssemblyMenu(int containerId, Inventory playerInventory, Container parts,
+                        ContainerLevelAccess access) {
         super(menuType(), containerId);
         this.parts = parts;
+        this.access = access;
         this.player = playerInventory.player;
 
         addSlot(new Slot(parts, SLOT_ROD, LAYOUT.frame(SLOT_ROD).x(), LAYOUT.frame(SLOT_ROD).y()) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                // 竿位：放竿，或者放"杆材料"（用来修补 / 换底）
-                if (isRod(stack)) {
-                    return !hasItem();
-                }
-                return RodMaterials.match(RodMaterials.Part.ROD, stack) != null && isRod(getRod());
+                return isRod(stack);
             }
         });
         addSlot(materialSlot(SLOT_ROD_MAT, RodMaterials.Part.ROD));
         addSlot(materialSlot(SLOT_LINE, RodMaterials.Part.LINE));
         addSlot(materialSlot(SLOT_HOOK, RodMaterials.Part.HOOK));
-        addSlot(new Slot(parts, SLOT_RESULT, LAYOUT.frame(SLOT_RESULT).x(), LAYOUT.frame(SLOT_RESULT).y()) {
+        addSlot(new Slot(result, 0, LAYOUT.frame(SLOT_RESULT).x(), LAYOUT.frame(SLOT_RESULT).y()) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return false;   // 成品格只出不进
@@ -93,10 +101,11 @@ public class AssemblyMenu extends AbstractContainerMenu {
             @Override
             public void onTake(Player p, ItemStack taken) {
                 if (!p.level().isClientSide()) {
-                    // 竿变成了产物 → 竿位清空；只有**真正参与了变化**的材料各扣 1 个
+                    // 实时计算当前真正参与变化的材料，防止并发/缓存状态错乱导致白嫖材料
+                    Computed computed = computeResult();
                     parts.setItem(SLOT_ROD, ItemStack.EMPTY);
-                    for (int i = 0; i < contributing.length; i++) {
-                        if (!contributing[i]) {
+                    for (int i = 0; i < computed.contributing().length; i++) {
+                        if (!computed.contributing()[i]) {
                             continue;
                         }
                         ItemStack material = parts.getItem(i + 1);
@@ -157,22 +166,14 @@ public class AssemblyMenu extends AbstractContainerMenu {
         updateResult();
     }
 
-    /** 每 3 个材料槽是否"真的改变了竿"（取走成品时只扣这些）。 */
-    private final boolean[] contributing = new boolean[3];
+    private record Computed(ItemStack output, boolean[] contributing) {
+    }
 
-    /**
-     * 重算成品格。输入一变就调（26.1 的 slotsChanged 不会自己触发，
-     * 所以挂在 clicked 上 —— 和之前"换不了配件"同一个坑）。
-     */
-    public void updateResult() {
-        if (player == null || player.level().isClientSide()) {
-            return;   // 客户端等同步，别本地瞎算
-        }
-        java.util.Arrays.fill(contributing, false);
+    private Computed computeResult() {
+        boolean[] contributing = new boolean[3];
         ItemStack rod = parts.getItem(SLOT_ROD);
         if (!isRod(rod)) {
-            setResult(ItemStack.EMPTY);
-            return;
+            return new Computed(ItemStack.EMPTY, contributing);
         }
         RodData data = RodData.of(rod);
         if (data == null) {
@@ -196,21 +197,31 @@ public class AssemblyMenu extends AbstractContainerMenu {
             }
         }
         if (next.equals(data)) {
-            setResult(ItemStack.EMPTY);
-            return;
+            return new Computed(ItemStack.EMPTY, contributing);
         }
         ItemStack preview = rod.copy();
         preview.setCount(1);
         next.writeTo(preview);
         next.applyVanillaBar(preview);
-        setResult(preview);
+        return new Computed(preview, contributing);
+    }
+
+    /**
+     * 重算成品格。输入一变就调（26.1 的 slotsChanged 不会自己触发，
+     * 所以挂在 clicked 上 —— 和之前"换不了配件"同一个坑）。
+     */
+    public void updateResult() {
+        if (player == null || player.level().isClientSide()) {
+            return;   // 客户端等同步，别本地瞎算
+        }
+        setResult(computeResult().output());
     }
 
     private void setResult(ItemStack stack) {
-        if (ItemStack.matches(parts.getItem(SLOT_RESULT), stack)) {
+        if (ItemStack.matches(result.getItem(0), stack)) {
             return;   // 没变就别动，省一次同步
         }
-        parts.setItem(SLOT_RESULT, stack);
+        result.setItem(0, stack);
     }
 
 
@@ -244,13 +255,13 @@ public class AssemblyMenu extends AbstractContainerMenu {
             return;
         }
         // 只交还输入格；成品格是派生的，直接丢掉
-        for (int i = 0; i < SLOT_RESULT; i++) {
+        for (int i = 0; i < AssemblyBlockEntity.INPUT_SIZE; i++) {
             ItemStack stack = parts.removeItemNoUpdate(i);
             if (!stack.isEmpty() && !player.getInventory().add(stack)) {
                 player.drop(stack, false);
             }
         }
-        parts.setItem(SLOT_RESULT, ItemStack.EMPTY);
+        result.setItem(0, ItemStack.EMPTY);
     }
 
     @Override
@@ -261,33 +272,55 @@ public class AssemblyMenu extends AbstractContainerMenu {
         }
         ItemStack stack = slot.getItem();
         ItemStack copy = stack.copy();
+        int invStart = SLOT_RESULT + 1;
         if (index == SLOT_RESULT) {
-            // shift 快移成品：等价于取走（消耗输入）
-            slot.onTake(player, stack);
-            if (!player.getInventory().add(stack)) {
-                player.drop(stack, false);
-            }
-            slot.setByPlayer(ItemStack.EMPTY);
-            updateResult();
-            return copy;
-        }
-        if (index < 4) {
-            if (!moveItemStackTo(stack, 4, slots.size(), true)) {
+            if (!moveItemStackTo(stack, invStart, slots.size(), true)) {
                 return ItemStack.EMPTY;
             }
-        } else if (!moveItemStackTo(stack, SLOT_ROD, SLOT_ROD + 1, false)) {
-            return ItemStack.EMPTY;
+            slot.onQuickCraft(stack, copy);
+            slot.onTake(player, copy);
+            return copy;
+        }
+        if (index < SLOT_RESULT) {
+            if (!moveItemStackTo(stack, invStart, slots.size(), true)) {
+                return ItemStack.EMPTY;
+            }
+        } else {
+            boolean moved = false;
+            if (isRod(stack)) {
+                moved = moveItemStackTo(stack, SLOT_ROD, SLOT_ROD + 1, false);
+            } else {
+                if (RodMaterials.match(RodMaterials.Part.ROD, stack) != null) {
+                    moved = moveItemStackTo(stack, SLOT_ROD_MAT, SLOT_ROD_MAT + 1, false);
+                }
+                if (!moved && RodMaterials.match(RodMaterials.Part.LINE, stack) != null) {
+                    moved = moveItemStackTo(stack, SLOT_LINE, SLOT_LINE + 1, false);
+                }
+                if (!moved && RodMaterials.match(RodMaterials.Part.HOOK, stack) != null) {
+                    moved = moveItemStackTo(stack, SLOT_HOOK, SLOT_HOOK + 1, false);
+                }
+            }
+            if (!moved) {
+                return ItemStack.EMPTY;
+            }
         }
         if (stack.isEmpty()) {
             slot.setByPlayer(ItemStack.EMPTY);
         } else {
             slot.setChanged();
         }
+        if (stack.getCount() == copy.getCount()) {
+            return ItemStack.EMPTY;
+        }
+        slot.onTake(player, stack);
         return copy;
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return true;
+        return access.evaluate(
+                (level, pos) -> level.getBlockEntity(pos) instanceof AssemblyBlockEntity
+                        && player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) <= 64.0,
+                true);
     }
 }

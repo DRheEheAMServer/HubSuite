@@ -59,7 +59,7 @@ public final class RodTooltip {
         }
         lines.add(Component.literal(DARK + HINT));
         lines.add(Component.literal(GRAY + "速度: " + "\u00A7f×" + tenths(data.speedTenths())));
-        lines.add(Component.literal(GRAY + "幸运: " + "\u00A7f×" + thousandths(data.luckMilli())));
+        lines.add(Component.literal(GRAY + "幸运: " + "\u00A7f" + formatLuck(data)));
         lines.add(Component.literal(GRAY + "断线: " + "\u00A7f" + permille(data.breakPermille())));
         return lines;
     }
@@ -84,6 +84,9 @@ public final class RodTooltip {
         lines.add(Component.literal(C_LINE + "▍线 " + cLine + lineLabel(line.id())
                 + " " + DARK + "(" + line.item() + ")"));
         lines.add(stat(cLine, "断线", permille(line.breakPermille())));
+        if (!neutral(line.durabilityMul())) {
+            lines.add(stat(cLine, "耐久", "×" + tenths(line.durabilityMul())));
+        }
         if (!neutral(line.speedMul())) {
             lines.add(stat(cLine, "速度", "×" + tenths(line.speedMul())));
         }
@@ -187,12 +190,32 @@ public final class RodTooltip {
         return upgrade != null && upgrade.id() != null && !upgrade.id().isBlank();
     }
 
+    private static String formatLuck(RodData data) {
+        RodMaterials.Upgrade u = data.upgradeMaterial();
+        int add = u.luckAdd();
+        int mul = u.luckMul();
+        if (add > 0 && !neutral(mul)) {
+            return "+" + add + " (×" + tenths(mul) + ")";
+        }
+        if (add > 0) {
+            return "+" + add;
+        }
+        if (!neutral(mul)) {
+            return "×" + tenths(mul);
+        }
+        return "+0";
+    }
+
     private static String tenths(int value) {
-        return (value / 10) + "." + Math.abs(value % 10);
+        String sign = value < 0 ? "-" : "";
+        int abs = Math.abs(value);
+        return sign + (abs / 10) + "." + (abs % 10);
     }
 
     private static String thousandths(int value) {
-        return (value / 1000) + "." + String.format("%03d", Math.abs(value % 1000));
+        String sign = value < 0 ? "-" : "";
+        int abs = Math.abs(value);
+        return sign + (abs / 1000) + "." + String.format("%03d", abs % 1000);
     }
 
     /** 千分比在 ×10 域里存着：{@code 7} → {@code 0.7%}。 */
