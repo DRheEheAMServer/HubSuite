@@ -59,10 +59,22 @@ public abstract class FishingHookLootMixin {
             String biome = level.getBiome(self.blockPosition()).unwrapKey()
                     .map(k -> k.identifier().getPath())
                     .orElse(null);
-            int luck = owner instanceof ServerPlayer sp ? (int) sp.getLuck() : 0;
-            List<FishingLoot.Catch> rolled = FishingLoot.roll(table, biome, level.getRandom(), luck);
+            var baitSel = cn.dreamgary.hubsuite.feature.FishingBait.select(owner, self.isInLava());
+            int luck = (owner instanceof ServerPlayer sp ? (int) sp.getLuck() : 0)
+                    + (baitSel.present() ? cn.dreamgary.hubsuite.feature.FishingBait.bonusLuck(baitSel.bait()) : 0);
+            List<FishingLoot.Catch> rolled = new java.util.ArrayList<>(
+                    FishingLoot.roll(table, biome, level.getRandom(), luck));
             if (rolled.isEmpty()) {
                 return original;   // 表里没有可用条目 → 别把玩家的这次钓获吃掉
+            }
+            if (!lineBroke && baitSel.present()) {
+                double twinChance = cn.dreamgary.hubsuite.feature.FishingBait.twinCatchChance(baitSel.bait());
+                if (twinChance > 0.0 && level.getRandom().nextDouble() < twinChance) {
+                    rolled.addAll(FishingLoot.roll(table, biome, level.getRandom(), luck));
+                    if (owner instanceof ServerPlayer sp) {
+                        sp.sendSystemMessage(Component.literal("\u00A7b✦ 双生鱼饵触发双倍渔获！"), true);
+                    }
+                }
             }
             /*
              * 到这一步才扣副手钓饵。

@@ -26,12 +26,15 @@ public final class HubSuiteClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientMenuTypes.register();
         ClientItems.register();
+        cn.dreamgary.hubsuite.client.magic.ClientMagicRegistry.register();
         // 创造模式标签页（与服务端同 id）：没有它，物品在创造模式物品栏与 JEI 里都找不到
         cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.register();
         ClientItems.registerAssetCheck();
         ClientHandshake.register();
         ClientLavaFishing.register();
         ClientRodTooltip.register();   // 钓竿 tooltip：平时看总数，Shift 看部件明细
+        cn.dreamgary.hubsuite.client.magic.ClientMagicTooltip.register();
+        ClientTrinketUi.register();
 
         // 开发调试工具仅在开发环境启用（生产客户端 JAR 已剔除 Dev*.class）
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {

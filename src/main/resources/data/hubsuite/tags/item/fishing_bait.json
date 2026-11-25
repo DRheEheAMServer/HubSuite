@@ -8,6 +8,14 @@
     "minecraft:nautilus_shell",
     "minecraft:nether_star",
     "minecraft:blaze_powder",
-    "minecraft:magma_cream"
+    "minecraft:magma_cream",
+    "hubsuite:basic_bait",
+    "hubsuite:refined_bait",
+    "hubsuite:abyssal_bait",
+    "hubsuite:ember_bait",
+    "hubsuite:magma_bait",
+    "hubsuite:infernal_bait",
+    "hubsuite:treasure_bait",
+    "hubsuite:twin_bait"
   ]
 }

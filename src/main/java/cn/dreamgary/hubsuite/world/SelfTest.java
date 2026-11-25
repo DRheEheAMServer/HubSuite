@@ -190,6 +190,109 @@ public final class SelfTest {
         step("青金石附魔（附魔台等价 / 宝藏池排除诅咒 / 概率边界）", this::checkRodEnchanting);
         step("旧熔岩钓竿换算（钩决定岩浆 / 磨损比例照搬 / 配方已删）", this::checkLegacyLavaRod);
         step("原版耐久扣减不碰我们的竿（否则会在坏掉那一刻被销毁）", this::checkRodDurabilityShield);
+        step("虚月律魔法系统（月相 / 侵蚀 / 镶嵌 / 碎宝石 / 祭坛配方 / 资源）", this::checkMagicSystem);
+    }
+
+    private void checkMagicSystem() {
+        var bad = new java.util.ArrayList<String>();
+        // 1. 注册表 + 不可破坏属性
+        for (var id : cn.dreamgary.hubsuite.magic.MagicIds.ALL_BLOCKS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id)) {
+                bad.add("缺方块:" + id);
+            }
+            if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
+                bad.add("缺方块实体:" + id);
+            }
+        }
+        for (var id : cn.dreamgary.hubsuite.magic.MagicIds.ALL_ITEMS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) {
+                bad.add("缺物品:" + id);
+            }
+            String modelPath = "/assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json";
+            if (SelfTest.class.getResource(modelPath) == null) {
+                bad.add("缺模型:" + modelPath);
+            }
+        }
+        if (cn.dreamgary.hubsuite.magic.MagicRegistry.VOID_CRYSTAL.defaultDestroyTime() >= 0.0F) {
+            bad.add("蚀空凝晶必须不可破坏(destroyTime<0)");
+        }
+        // 2. 月相公式
+        if (cn.dreamgary.hubsuite.magic.MoonPhaseMath.moonFactor(1.0F) != 1.00
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.voidFactor(0.0F) != 1.00
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.moonFactor(0.5F) != 0.50
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.voidFactor(0.5F) != 0.50) {
+            bad.add("月相双能系数有误");
+        }
+        // 3. 虚空侵蚀高度与硬度单调递增
+        if (cn.dreamgary.hubsuite.magic.VoidErosionRules.MAX_EROSION_Y != -48) {
+            bad.add("MAX_EROSION_Y应为-48");
+        }
+        int pDirt = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(0.5F);
+        int pCobble = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(2.0F);
+        int pObs = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(50.0F);
+        int vCobble = cn.dreamgary.hubsuite.magic.VoidErosionRules.storedVoid(2.0F);
+        int vObs = cn.dreamgary.hubsuite.magic.VoidErosionRules.storedVoid(50.0F);
+        if (!(pDirt < pCobble && pCobble < pObs && vCobble < vObs)) {
+            bad.add("硬度侵蚀曲线未随硬度递增");
+        }
+        // 4. 法器镶嵌与碎宝石不碎法杖（含裸物品默认组件 + MagicSocketing）
+        var rawCrystal = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_CRYSTAL);
+        var rawCrystalData = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(rawCrystal);
+        if (rawCrystalData == null || !rawCrystalData.isMoonGem()) {
+            bad.add("裸月能结晶应具备默认月光组件");
+        } else {
+            rawCrystalData.withMoon(320).writeTo(rawCrystal);
+        }
+        var staff = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOONWING_STAFF);
+        boolean socketOk = cn.dreamgary.hubsuite.magic.MagicSocketing.trySocket(
+                staff, rawCrystal, cn.dreamgary.hubsuite.magic.MagicIds.MOON_CRYSTAL,
+                cn.dreamgary.hubsuite.magic.MagicEnergyData.GEM_MOON, null, false);
+        var readBack = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(staff);
+        if (!socketOk || !rawCrystal.isEmpty() || readBack == null || !readBack.isMoonGem() || readBack.moon() != 320) {
+            bad.add("法器镶嵌读写失败");
+        } else {
+            readBack.shatterGem().writeTo(staff);
+            var afterShatter = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(staff);
+            if (afterShatter == null || afterShatter.hasGem() || staff.isEmpty()) {
+                bad.add("碎宝石后应保留空槽法器本体");
+            }
+        }
+        // 5. 祭坛配方匹配（含生态转化与拨月仪式）
+        var rStaff = cn.dreamgary.hubsuite.magic.MagicRecipes.match(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STICK),
+                java.util.List.of(
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FEATHER),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FEATHER),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.PHANTOM_MEMBRANE),
+                        new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_CRYSTAL)));
+        var rPhase = cn.dreamgary.hubsuite.magic.MagicRecipes.match(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GLOWSTONE),
+                java.util.List.of(
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.LAPIS_LAZULI)));
+        if (rStaff == null || !"moonwing_staff".equals(rStaff.id())
+                || rPhase == null || !rPhase.isPhaseShift() || rPhase.targetMoonPhase() != 0) {
+            bad.add("祭坛配方匹配失败");
+        }
+        // 6. 炽月晶与 Curios 风格饰品槽校验
+        var blazing = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.BLAZING_MOON_CRYSTAL);
+        var blazingData = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(blazing);
+        if (blazingData == null || !blazingData.isBlazingMoon()
+                || blazingData.maxMoon() != cn.dreamgary.hubsuite.magic.MagicEnergyData.BLAZING_CAPACITY) {
+            bad.add("炽月晶默认组件校验失败");
+        }
+        var bracer = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.VOID_BRACER);
+        var anklet = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_ANKLET);
+        if (!cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.WRIST, bracer)
+                || cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.RING_1, bracer)
+                || !cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.RING_1, anklet)) {
+            bad.add("饰品槽位类型校验失败");
+        }
+        if (bad.isEmpty()) {
+            ok("虚月律魔法系统校验通过（5 方块 / 16 物品 / 月相 / Y<=-48 / 炽月晶 / 饰品槽 / 祭坛仪式）");
+        } else {
+            fail("虚月律魔法系统失败：" + String.join("；", bad));
+        }
     }
 
 

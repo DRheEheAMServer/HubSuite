@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " Q ",
+    "QDQ",
+    " Q "
+  ],
+  "key": {
+    "Q": "minecraft:quartz",
+    "D": "minecraft:lapis_lazuli"
+  },
+  "result": {
+    "id": "hubsuite:moon_crystal",
+    "count": 1
+  }
+}

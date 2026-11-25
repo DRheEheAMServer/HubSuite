@@ -52,7 +52,15 @@ public final class HubSuiteCreativeTabs {
             HubSuiteItemDefs.WOODEN_FISHING_BUCKET.id(),
             HubSuiteItemDefs.IRON_FISHING_BUCKET.id(),
             HubSuiteItemDefs.DIAMOND_FISHING_BUCKET.id(),
-            AssemblyTableIds.ID);
+            AssemblyTableIds.ID,
+            cn.dreamgary.hubsuite.magic.MagicIds.MOON_ALTAR,
+            cn.dreamgary.hubsuite.magic.MagicIds.MAGIC_PEDESTAL,
+            cn.dreamgary.hubsuite.magic.MagicIds.LUNAR_VOID_ALTAR,
+            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CRYSTAL,
+            cn.dreamgary.hubsuite.magic.MagicIds.MOON_CRYSTAL,
+            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CORE,
+            cn.dreamgary.hubsuite.magic.MagicIds.MOONWING_STAFF,
+            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CHARM);
 
     private HubSuiteCreativeTabs() {
     }

@@ -133,6 +133,8 @@ public final class PlayerStateStash {
         // 落盘必须在**玩家还站在旧维度、身上还是旧状态**的时候做：
         // 否则内存暂存一清（关服/掉线），这份状态就再也没人写进那个维度的存档了。
         persist(player, dimension);
+        ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+        cn.dreamgary.hubsuite.trinket.TrinketStorage.onCapture(player, canonical != null ? canonical : dimension);
     }
 
     /**
@@ -158,6 +160,8 @@ public final class PlayerStateStash {
                 state = State.empty();
             }
             write(player, state);
+            ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+            cn.dreamgary.hubsuite.trinket.TrinketStorage.onApply(player, canonical != null ? canonical : dimension);
         } catch (Throwable t) {
             HubSuite.logger().error("套用 {} 在 {} 的状态失败",
                     player.getName().getString(), worldId, t);
@@ -457,6 +461,7 @@ public final class PlayerStateStash {
      */
     public static void forget(UUID uuid) {
         STASH.remove(uuid);
+        cn.dreamgary.hubsuite.trinket.TrinketEngine.forgetPlayer(uuid);
     }
 
     /** 重置玩家在指定维度的暂存状态与磁盘存档（用于 /island reset 防止刷开局物资）。 */
@@ -472,6 +477,8 @@ public final class PlayerStateStash {
             write(player, empty);
             persist(player, dimension);
         }
+        ResourceKey<Level> canonical = PortalLinks.parentOverworld(dimension);
+        cn.dreamgary.hubsuite.trinket.TrinketStorage.resetDimension(player, canonical != null ? canonical : dimension);
     }
 
     public static void clear() {

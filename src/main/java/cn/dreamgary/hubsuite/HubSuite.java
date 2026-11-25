@@ -115,6 +115,9 @@ public final class HubSuite implements ModInitializer {
         // 装配台（0.5.0 先做菜单与界面，0.6 方块化）
         cn.dreamgary.hubsuite.rod.AssemblyTable.register();
 
+        // 空岛「虚月律」魔法系统（方块 / 载体 / 法器 / 虚空侵蚀）
+        cn.dreamgary.hubsuite.magic.MagicRegistry.register(configManager.configDir());
+
         // 创造模式标签页：物品不归入任何标签页，创造模式物品栏与 JEI 里都会找不到
         cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.register();
 
@@ -247,6 +250,8 @@ public final class HubSuite implements ModInitializer {
             if (questManager != null) {
                 questManager.saveIfDirty();
             }
+            cn.dreamgary.hubsuite.magic.VoidErosionManager.saveIfDirty();
+            cn.dreamgary.hubsuite.trinket.TrinketStorage.saveAll(server);
             if (authService != null) {
                 authService.shutdown();
             }

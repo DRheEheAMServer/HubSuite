@@ -2,6 +2,9 @@
   "replace": false,
   "values": [
     "minecraft:blaze_powder",
-    "minecraft:magma_cream"
+    "minecraft:magma_cream",
+    "hubsuite:ember_bait",
+    "hubsuite:magma_bait",
+    "hubsuite:infernal_bait"
   ]
 }

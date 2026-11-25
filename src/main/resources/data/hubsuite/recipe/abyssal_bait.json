@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " P ",
+    "RNR",
+    " R "
+  ],
+  "key": {
+    "R": "hubsuite:refined_bait",
+    "P": "minecraft:prismarine_shard",
+    "N": "minecraft:nautilus_shell"
+  },
+  "result": {
+    "id": "hubsuite:abyssal_bait",
+    "count": 4
+  }
+}

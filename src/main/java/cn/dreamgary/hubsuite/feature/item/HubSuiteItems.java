@@ -39,6 +39,15 @@ public final class HubSuiteItems {
     public static Item WOODEN_FISHING_BUCKET;
     public static Item IRON_FISHING_BUCKET;
     public static Item DIAMOND_FISHING_BUCKET;
+    /** 8 种自定义钓饵（水 3 档 / 岩浆 3 档 / 通用功能 2 种）。 */
+    public static Item BASIC_BAIT;
+    public static Item REFINED_BAIT;
+    public static Item ABYSSAL_BAIT;
+    public static Item EMBER_BAIT;
+    public static Item MAGMA_BAIT;
+    public static Item INFERNAL_BAIT;
+    public static Item TREASURE_BAIT;
+    public static Item TWIN_BAIT;
 
     private HubSuiteItems() {
     }
@@ -55,8 +64,17 @@ public final class HubSuiteItems {
         IRON_FISHING_BUCKET = bucket("iron_fishing_bucket", 256);
         DIAMOND_FISHING_BUCKET = bucket("diamond_fishing_bucket", 1024);
 
+        BASIC_BAIT = register("basic_bait", new HubSuiteSimpleItem(props("basic_bait")));
+        REFINED_BAIT = register("refined_bait", new HubSuiteSimpleItem(props("refined_bait")));
+        ABYSSAL_BAIT = register("abyssal_bait", new HubSuiteSimpleItem(props("abyssal_bait")));
+        EMBER_BAIT = register("ember_bait", new HubSuiteSimpleItem(props("ember_bait")));
+        MAGMA_BAIT = register("magma_bait", new HubSuiteSimpleItem(props("magma_bait")));
+        INFERNAL_BAIT = register("infernal_bait", new HubSuiteSimpleItem(props("infernal_bait")));
+        TREASURE_BAIT = register("treasure_bait", new HubSuiteSimpleItem(props("treasure_bait")));
+        TWIN_BAIT = register("twin_bait", new HubSuiteSimpleItem(props("twin_bait")));
+
         cn.dreamgary.hubsuite.HubSuite.logger().info(
-                "已注册 4 个自定义物品（地狱线 / 三种渔桶）+ 1 个遗留别名（熔岩钓竿，只能被换算掉）；钓饵改成 tag 驱动，见 #hubsuite:fishing_bait");
+                "已注册 12 个自定义物品（地狱线 / 三种渔桶 / 8 种钓饵）+ 1 个遗留别名（熔岩钓竿）");
     }
 
     private static Item bucket(String path, int capacity) {

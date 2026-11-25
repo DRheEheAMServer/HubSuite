@@ -6,7 +6,8 @@
 	"client": [
 		"MenuScreensMixin",
 		"ClientFishingHookMixin",
-		"ClientEntityLavaHurtMixin"
+		"ClientEntityLavaHurtMixin",
+		"InventoryScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

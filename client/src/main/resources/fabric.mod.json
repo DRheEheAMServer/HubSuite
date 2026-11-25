@@ -20,6 +20,9 @@
 	"entrypoints": {
 		"client": [
 			"cn.dreamgary.hubsuite.client.HubSuiteClient"
+		],
+		"jei_mod_plugin": [
+			"cn.dreamgary.hubsuite.client.jei.HubSuiteJeiPlugin"
 		]
 	},
 	"depends": {

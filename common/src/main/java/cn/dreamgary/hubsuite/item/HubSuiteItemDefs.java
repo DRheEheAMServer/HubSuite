@@ -50,10 +50,23 @@ public final class HubSuiteItemDefs {
     public static final Def IRON_FISHING_BUCKET = new Def("iron_fishing_bucket", 1, Rarity.UNCOMMON, 0);
     public static final Def DIAMOND_FISHING_BUCKET = new Def("diamond_fishing_bucket", 1, Rarity.RARE, 0);
 
+    /** 水钓 3 档钓饵 + 岩浆 3 档钓饵 + 2 种功能型通用钓饵。 */
+    public static final Def BASIC_BAIT = new Def("basic_bait", 64, Rarity.COMMON, 0);
+    public static final Def REFINED_BAIT = new Def("refined_bait", 64, Rarity.UNCOMMON, 0);
+    public static final Def ABYSSAL_BAIT = new Def("abyssal_bait", 64, Rarity.RARE, 0);
+    public static final Def EMBER_BAIT = new Def("ember_bait", 64, Rarity.COMMON, 0);
+    public static final Def MAGMA_BAIT = new Def("magma_bait", 64, Rarity.UNCOMMON, 0);
+    public static final Def INFERNAL_BAIT = new Def("infernal_bait", 64, Rarity.RARE, 0);
+    public static final Def TREASURE_BAIT = new Def("treasure_bait", 64, Rarity.RARE, 0);
+    public static final Def TWIN_BAIT = new Def("twin_bait", 64, Rarity.RARE, 0);
+
     /** 全部物品（顺序即注册顺序）。 */
     public static final List<Def> ALL = List.of(
             NETHER_STRING, LAVA_ROD,
-            WOODEN_FISHING_BUCKET, IRON_FISHING_BUCKET, DIAMOND_FISHING_BUCKET);
+            WOODEN_FISHING_BUCKET, IRON_FISHING_BUCKET, DIAMOND_FISHING_BUCKET,
+            BASIC_BAIT, REFINED_BAIT, ABYSSAL_BAIT,
+            EMBER_BAIT, MAGMA_BAIT, INFERNAL_BAIT,
+            TREASURE_BAIT, TWIN_BAIT);
 
     private HubSuiteItemDefs() {
     }

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "minecraft:coal",
+    "minecraft:gunpowder",
+    "minecraft:blaze_powder"
+  ],
+  "result": {
+    "id": "hubsuite:ember_bait",
+    "count": 4
+  }
+}

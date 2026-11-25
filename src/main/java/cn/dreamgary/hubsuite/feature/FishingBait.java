@@ -60,6 +60,22 @@ public final class FishingBait {
         return item != null && BuiltInRegistries.ITEM.wrapAsHolder(item).is(NETHER_BAIT);
     }
 
+    /** 通用功能饵（寻宝秘饵 / 双生鱼饵）：水与岩浆环境均可匹配，不触发跨环境减速惩罚。 */
+    public static boolean isUniversalBait(Item item) {
+        return item == cn.dreamgary.hubsuite.feature.item.HubSuiteItems.TREASURE_BAIT
+                || item == cn.dreamgary.hubsuite.feature.item.HubSuiteItems.TWIN_BAIT;
+    }
+
+    /** 额外幸运加成（寻宝秘饵 +3 幸运）。 */
+    public static int bonusLuck(Item item) {
+        return item == cn.dreamgary.hubsuite.feature.item.HubSuiteItems.TREASURE_BAIT ? 3 : 0;
+    }
+
+    /** 额外双倍渔获触发概率（双生鱼饵 45%）。 */
+    public static double twinCatchChance(Item item) {
+        return item == cn.dreamgary.hubsuite.feature.item.HubSuiteItems.TWIN_BAIT ? 0.45 : 0.0;
+    }
+
     /** 档次（消耗顺序用）：稀有度越高越先消耗。 */
     public static int tierOf(ItemStack stack) {
         return tierOfRarity(stack.getRarity());
@@ -152,7 +168,7 @@ public final class FishingBait {
          */
         if (off.getItem() instanceof BaitBucketItem) {
             Item top = BaitBucketItem.containedBait(off);
-            if (top == null || isNetherBait(top) != inLava) {
+            if (top == null || (!isUniversalBait(top) && isNetherBait(top) != inLava)) {
                 return Selection.NONE;
             }
             int tier = tierOf(top);
@@ -161,7 +177,7 @@ public final class FishingBait {
 
         /*
          * 散饵（副手直接放饵）：
-         *   · 族匹配 → 加速；
+         *   · 族匹配或通用饵 → 加速；
          *   · 族不匹配 → **减速**（惩罚），而且照样扣 1 个。
          */
         if (!isBait(off)) {
@@ -171,7 +187,7 @@ public final class FishingBait {
         if (tier <= 0) {
             return Selection.NONE;
         }
-        if (isNetherBait(off) == inLava) {
+        if (isUniversalBait(off.getItem()) || isNetherBait(off) == inLava) {
             return new Selection(off.getItem(), speedupOfTier(tier), tier, false);
         }
         return new Selection(off.getItem(), -mismatchPenalty(), tier, true);

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " I ",
+    " S ",
+    "SSS"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "S": "minecraft:stone_bricks"
+  },
+  "result": {
+    "id": "hubsuite:magic_pedestal",
+    "count": 1
+  }
+}

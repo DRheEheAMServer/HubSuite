@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " E ",
+    "EME",
+    " G "
+  ],
+  "key": {
+    "E": "hubsuite:ember_bait",
+    "M": "minecraft:magma_cream",
+    "G": "minecraft:gold_nugget"
+  },
+  "result": {
+    "id": "hubsuite:magma_bait",
+    "count": 4
+  }
+}

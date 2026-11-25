@@ -131,11 +131,16 @@ public final class ClientCompat {
                 HandshakePayloads.PROTOCOL, serverVersion(), safeMin(), config.timeoutSeconds));
     }
 
-    /** 通用界面按钮：装配台的「装配」= 吃材料、生效。 */
+    /** 通用界面按钮：装配台的「装配」或客户端请求打开虚月饰品栏。 */
     private void onUiAction(cn.dreamgary.hubsuite.net.UiActionPayload.UiAction payload,
                             ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
-        if (player == null || player.containerMenu == null) {
+        if (player == null) {
+            return;
+        }
+        if (cn.dreamgary.hubsuite.trinket.TrinketMenu.ID.toString().equals(payload.menu())
+                && "open".equals(payload.action())) {
+            cn.dreamgary.hubsuite.trinket.TrinketStorage.openMenu(player);
             return;
         }
         if (player.containerMenu instanceof cn.dreamgary.hubsuite.rod.AssemblyMenu menu

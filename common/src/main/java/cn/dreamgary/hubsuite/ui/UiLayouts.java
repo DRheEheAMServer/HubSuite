@@ -41,11 +41,26 @@ public final class UiLayouts {
             new UiLayout.Preview(0, 68, 12, 5.0F),
             List.of());
 
+    /** Curios 风格虚月饰品栏（5 格语义槽位）。 */
+    public static final UiLayout TRINKETS = new UiLayout(
+            Identifier.fromNamespaceAndPath("hubsuite", "trinkets"),
+            176, 166, "虚月饰品栏",
+            List.of(
+                    new UiLayout.SlotFrame(0, 18, 22, "护符"),
+                    new UiLayout.SlotFrame(1, 18, 48, "戒指 I"),
+                    new UiLayout.SlotFrame(2, 114, 22, "戒指 II"),
+                    new UiLayout.SlotFrame(3, 114, 48, "披风"),
+                    new UiLayout.SlotFrame(4, 66, 35, "护腕")),
+            "背包",
+            null,
+            List.of());
+
     /** 菜单类型 id → 布局。 */
     private static final Map<Identifier, UiLayout> BY_MENU = new LinkedHashMap<>();
 
     static {
         BY_MENU.put(ASSEMBLY.id(), ASSEMBLY);
+        BY_MENU.put(TRINKETS.id(), TRINKETS);
     }
 
     private UiLayouts() {

@@ -26,7 +26,7 @@ public final class AssemblyTableIds {
 
     /** 方块属性（两端必须一样，否则状态数/属性对不上）。 */
     public static Block.Properties blockProperties() {
-        return Block.Properties.of().setId(BLOCK_KEY).strength(2.5F);
+        return Block.Properties.of().setId(BLOCK_KEY).strength(2.5F).noOcclusion();
     }
 
     /** 方块物品的属性。 */

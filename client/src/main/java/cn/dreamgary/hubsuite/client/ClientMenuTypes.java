@@ -18,6 +18,7 @@ public final class ClientMenuTypes {
 
     public static void register() {
         AssemblyMenu.registerType();
+        cn.dreamgary.hubsuite.trinket.TrinketMenu.registerType();
         // 客户端只需要"能渲染"，所以方块是普通方块（服务端那份是 BaseEntityBlock，带方块实体）
         var block = net.minecraft.core.Registry.register(net.minecraft.core.registries.BuiltInRegistries.BLOCK,
                 cn.dreamgary.hubsuite.rod.AssemblyTableIds.ID,

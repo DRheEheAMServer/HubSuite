@@ -34,7 +34,8 @@
     "ServerLevelSeedMixin",
     "ServerPlayerRespawnDimensionMixin",
     "StructureTemplatePaletteCacheMixin",
-    "BlockItemPlaceMixin"
+    "BlockItemPlaceMixin",
+    "VoidErosionChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 1

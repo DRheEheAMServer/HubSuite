@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "OAO",
+    " S ",
+    "SSS"
+  ],
+  "key": {
+    "O": "minecraft:obsidian",
+    "A": "minecraft:amethyst_shard",
+    "S": "minecraft:stone_bricks"
+  },
+  "result": {
+    "id": "hubsuite:lunar_void_altar",
+    "count": 1
+  }
+}
