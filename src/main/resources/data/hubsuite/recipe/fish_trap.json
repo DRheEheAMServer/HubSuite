@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PSP",
+    "S S",
+    "PPP"
+  ],
+  "key": {
+    "P": "minecraft:oak_slab",
+    "S": "minecraft:string"
+  },
+  "result": {
+    "id": "hubsuite:fish_trap",
+    "count": 1
+  }
+}

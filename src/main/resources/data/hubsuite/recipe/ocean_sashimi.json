@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:coral_butterflyfish",
+    "minecraft:kelp",
+    "minecraft:bowl"
+  ],
+  "result": {
+    "id": "hubsuite:ocean_sashimi",
+    "count": 1
+  }
+}

@@ -61,18 +61,21 @@ public abstract class FishingHookLootMixin {
                     .orElse(null);
             var baitSel = cn.dreamgary.hubsuite.feature.FishingBait.select(owner, self.isInLava());
             int luck = (owner instanceof ServerPlayer sp ? (int) sp.getLuck() : 0)
-                    + (baitSel.present() ? cn.dreamgary.hubsuite.feature.FishingBait.bonusLuck(baitSel.bait()) : 0);
+                    + (baitSel.present() ? cn.dreamgary.hubsuite.feature.FishingBait.bonusLuck(baitSel.bait()) : 0)
+                    + cn.dreamgary.hubsuite.ocean.OceanEventManager.bonusLuck(level.dimension());
             List<FishingLoot.Catch> rolled = new java.util.ArrayList<>(
                     FishingLoot.roll(table, biome, level.getRandom(), luck));
             if (rolled.isEmpty()) {
                 return original;   // 表里没有可用条目 → 别把玩家的这次钓获吃掉
             }
-            if (!lineBroke && baitSel.present()) {
-                double twinChance = cn.dreamgary.hubsuite.feature.FishingBait.twinCatchChance(baitSel.bait());
+            if (!lineBroke) {
+                double twinChance = (baitSel.present()
+                        ? cn.dreamgary.hubsuite.feature.FishingBait.twinCatchChance(baitSel.bait()) : 0.0)
+                        + cn.dreamgary.hubsuite.ocean.OceanEventManager.bonusDoubleCatch(level.dimension());
                 if (twinChance > 0.0 && level.getRandom().nextDouble() < twinChance) {
                     rolled.addAll(FishingLoot.roll(table, biome, level.getRandom(), luck));
                     if (owner instanceof ServerPlayer sp) {
-                        sp.sendSystemMessage(Component.literal("\u00A7b✦ 双生鱼饵触发双倍渔获！"), true);
+                        sp.sendSystemMessage(Component.literal("§b✦ 触发双倍渔获！"), true);
                     }
                 }
             }
@@ -97,6 +100,18 @@ public abstract class FishingHookLootMixin {
             for (FishingLoot.Catch c : rolled) {
                 if (c.stack().isEmpty()) {
                     continue;
+                }
+                var fishDef = cn.dreamgary.hubsuite.ocean.OceanFishDefs.byId(
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(c.stack().getItem()));
+                if (fishDef != null) {
+                    double mult = cn.dreamgary.hubsuite.ocean.OceanEventManager.starMultiplier(level.dimension());
+                    double starRoll = level.getRandom().nextDouble() / mult;
+                    int stars = starRoll < (0.08 + Math.max(0, luck) * 0.02) ? 3 : (starRoll < 0.35 ? 2 : 1);
+                    double kg = fishDef.minKg() + level.getRandom().nextDouble() * (fishDef.maxKg() - fishDef.minKg());
+                    new cn.dreamgary.hubsuite.ocean.OceanFishDefs.FishData(stars, kg).writeTo(c.stack());
+                    if (owner instanceof ServerPlayer sp) {
+                        cn.dreamgary.hubsuite.ocean.FishdexStorage.recordCatch(sp, fishDef, stars, kg);
+                    }
                 }
                 if (owner instanceof ServerPlayer sp && config != null && config.announceRare
                         && c.entry().rare()) {

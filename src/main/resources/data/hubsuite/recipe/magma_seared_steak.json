@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:ember_rockfish",
+    "minecraft:magma_cream"
+  ],
+  "result": {
+    "id": "hubsuite:magma_seared_steak",
+    "count": 1
+  }
+}

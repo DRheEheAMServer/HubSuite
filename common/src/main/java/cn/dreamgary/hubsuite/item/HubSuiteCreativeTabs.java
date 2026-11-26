@@ -64,6 +64,8 @@ public final class HubSuiteCreativeTabs {
         ids.add(HubSuiteItemDefs.INFERNAL_BAIT.id());
         ids.add(HubSuiteItemDefs.TREASURE_BAIT.id());
         ids.add(HubSuiteItemDefs.TWIN_BAIT.id());
+        ids.add(cn.dreamgary.hubsuite.ocean.OceanBlockIds.FISH_TRAP);
+        ids.addAll(cn.dreamgary.hubsuite.ocean.OceanFishDefs.ALL_ITEM_IDS);
         ids.addAll(cn.dreamgary.hubsuite.magic.MagicIds.ALL_ITEMS);
         return List.copyOf(ids);
     }

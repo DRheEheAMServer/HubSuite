@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:coral_butterflyfish"
+  ],
+  "result": {
+    "id": "minecraft:prismarine_crystals",
+    "count": 4
+  }
+}

@@ -207,8 +207,12 @@ public final class NaturalIslandPlacer {
                 level.setBlock(new BlockPos(x, baseY - 4, z), Blocks.STONE.defaultBlockState(), 3);
                 // 岛上方的方块清掉（海洋维度里可能正好压着水/海底）
                 for (int y = baseY + 1; y <= baseY + 5; y++) {
-                    if (!level.getBlockState(new BlockPos(x, y, z)).isAir()) {
-                        level.setBlock(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState(), 3);
+                    BlockPos clearPos = new BlockPos(x, y, z);
+                    if (!level.getBlockState(clearPos).isAir()) {
+                        if (level.getBlockEntity(clearPos) instanceof net.minecraft.world.Clearable clearable) {
+                            clearable.clearContent();
+                        }
+                        level.setBlock(clearPos, Blocks.AIR.defaultBlockState(), 3);
                     }
                 }
             }
@@ -216,6 +220,9 @@ public final class NaturalIslandPlacer {
 
         // 2) 宝箱
         BlockPos chestPos = new BlockPos(spot.x() + 1, baseY + 1, spot.z());
+        if (level.getBlockEntity(chestPos) instanceof net.minecraft.world.Clearable clearable) {
+            clearable.clearContent();
+        }
         level.setBlock(chestPos, Blocks.CHEST.defaultBlockState(), 3);
         var chestEntity = level.getBlockEntity(chestPos);
         if (chestEntity instanceof net.minecraft.world.Container chest) {

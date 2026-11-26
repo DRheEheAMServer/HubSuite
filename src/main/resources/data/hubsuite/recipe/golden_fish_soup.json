@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:golden_koi",
+    "minecraft:gold_nugget",
+    "minecraft:bowl"
+  ],
+  "result": {
+    "id": "hubsuite:golden_fish_soup",
+    "count": 1
+  }
+}

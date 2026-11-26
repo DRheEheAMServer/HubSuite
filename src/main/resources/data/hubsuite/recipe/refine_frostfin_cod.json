@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:frostfin_cod"
+  ],
+  "result": {
+    "id": "minecraft:blue_ice",
+    "count": 2
+  }
+}

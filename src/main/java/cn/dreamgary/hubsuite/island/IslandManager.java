@@ -693,6 +693,7 @@ public final class IslandManager {
                         if (!target.is(Blocks.WATER) && state.is(Blocks.AIR)) {
                             continue;
                         }
+                        clearBlockEntity(level, pos);
                         level.setBlock(pos, target, flags);
                         cleared++;
                     }
@@ -889,6 +890,16 @@ public final class IslandManager {
             paintLayers(level, center, baseY, radius, layers, deadline, overBudget);
         }
 
+        if (overBudget[0]) {
+            // 超时中断了 → 在放箱子/种树前提前返回，绝不能把半成品标成"已铺"，
+            // 也不提前放箱子，避免下 tick 补铺时替换箱子把物资爆出来。
+            HubSuite.logger().warn(
+                    "方格({}, {}) 地形未铺完（超出 {} ms 预算），已登记待补铺",
+                    island.plotX, island.plotZ, GENERATE_BUDGET_MS);
+            pendingTerrain.add(island.player);
+            return false;
+        }
+
 
         // 2) 清空"玩家落脚点"周围的悬空空间（必须在种树之前，否则会把树干挖掉）
         BlockPos spawnPos = center.offset(0, SPAWN_OFFSET_Y, 0);
@@ -912,9 +923,11 @@ public final class IslandManager {
         //     现在两者固定错开，并且放之前先清空那一格。
         if (type.chest) {
             BlockPos chestPos = center.offset(CHEST_OFFSET_X, 1, CHEST_OFFSET_Z);
-            // 先清空（含上方），避免被树叶/树干占用
+            // 先清空（含上方），避免被树叶/树干占用；若原位置有容器先清内容防爆物
             for (int dy = 0; dy <= 1; dy++) {
-                level.setBlockAndUpdate(chestPos.offset(0, dy, 0), Blocks.AIR.defaultBlockState());
+                BlockPos target = chestPos.offset(0, dy, 0);
+                clearBlockEntity(level, target);
+                level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
             }
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest) {
@@ -970,16 +983,6 @@ public final class IslandManager {
                     state.getBlock().getName().getString(), radius, layers.size());
         }
 
-        if (overBudget[0]) {
-            // 超时中断了 → 绝不能标记成"已铺"。
-            // 标记了的话 ensureTerrain 之后永远早退，"以后再补"永远不会发生，
-            // 玩家会永久得到一座半成品岛（甚至表层没铺、人直接掉下去）。
-            HubSuite.logger().warn(
-                    "方格({}, {}) 地形未铺完（超出 {} ms 预算），已登记待补铺",
-                    island.plotX, island.plotZ, GENERATE_BUDGET_MS);
-            pendingTerrain.add(island.player);
-            return false;
-        }
         // 地形铺好后，岛附近**不需要**手工补放海洋结构。
         //
         // 这里原来有一段"定向补放沉船/海底废墟"（OceanStructures）：当时的想法是
@@ -1332,10 +1335,18 @@ public final class IslandManager {
                 for (int dz = -radius; dz <= radius; dz++) {
                     var pos = base.offset(dx, dy, dz);
                     if (!level.getBlockState(pos).isAir()) {
+                        clearBlockEntity(level, pos);
                         level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
                     }
                 }
             }
+        }
+    }
+
+    /** 替换/清除方块前先清空容器内容，避免原版在破坏方块时把物资爆到地上。 */
+    private static void clearBlockEntity(ServerLevel level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof net.minecraft.world.Clearable clearable) {
+            clearable.clearContent();
         }
     }
 

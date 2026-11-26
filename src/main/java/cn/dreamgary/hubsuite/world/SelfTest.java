@@ -192,6 +192,55 @@ public final class SelfTest {
         step("原版耐久扣减不碰我们的竿（否则会在坏掉那一刻被销毁）", this::checkRodDurabilityShield);
         step("虚月律魔法系统（月相 / 侵蚀 / 镶嵌 / 碎宝石 / 祭坛配方 / 资源）", this::checkMagicSystem);
         step("虚月律方块名称、创造栏与祭坛交互回归", this::checkMagicAndItemsRegression);
+        step("海岛奇鱼、图鉴、海域事件与蟹笼回归", this::checkOceanExpansion);
+    }
+
+    private void checkOceanExpansion() {
+        var bad = new java.util.ArrayList<String>();
+        for (var id : cn.dreamgary.hubsuite.ocean.OceanFishDefs.ALL_ITEM_IDS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) {
+                bad.add("缺海岛物品:" + id);
+            }
+            String modelPath = "/assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json";
+            if (SelfTest.class.getResource(modelPath) == null) {
+                bad.add("缺海岛模型:" + modelPath);
+            }
+        }
+        var trapItem = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getValue(cn.dreamgary.hubsuite.ocean.OceanBlockIds.FISH_TRAP);
+        if (!"block.hubsuite.fish_trap".equals(trapItem.getDescriptionId())) {
+            bad.add("蟹笼名键错误:" + trapItem.getDescriptionId());
+        }
+        var oceanKey = net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_ocean"));
+        cn.dreamgary.hubsuite.ocean.OceanEventManager.startEvent(
+                cn.dreamgary.hubsuite.ocean.OceanEventManager.EventType.BIOLUM_NIGHT, null);
+        if (cn.dreamgary.hubsuite.ocean.OceanEventManager.bonusLuck(oceanKey) != 4) {
+            bad.add("荧光夜潮幸运加成应为 4");
+        }
+        cn.dreamgary.hubsuite.ocean.OceanEventManager.stopEvent();
+        if (cn.dreamgary.hubsuite.ocean.OceanEventManager.activeEvent() != null) {
+            bad.add("stopEvent 后事件仍存在");
+        }
+        var oceanLevel = server.getLevel(oceanKey);
+        if (oceanLevel != null) {
+            var pos = new net.minecraft.core.BlockPos(0, 70, 0);
+            var hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                    net.minecraft.core.Direction.UP, pos, false);
+            var res = cn.dreamgary.hubsuite.ocean.OceanRegistry.FISH_TRAP.defaultBlockState()
+                    .useItemOn(new ItemStack(Items.COD), oceanLevel, null,
+                            net.minecraft.world.InteractionHand.OFF_HAND, hit);
+            if (res != net.minecraft.world.InteractionResult.PASS) {
+                bad.add("蟹笼 OFF_HAND 未返回 PASS: " + res);
+            }
+        }
+        if (bad.isEmpty()) {
+            ok("海岛扩展校验通过（9 奇鱼 + 3 料理 + 蟹笼 + 海域事件 + OFF_HAND 防护）");
+        } else {
+            fail("海岛扩展回归失败：" + String.join("; ", bad));
+        }
     }
 
     private void checkMagicAndItemsRegression() {
@@ -238,6 +287,36 @@ public final class SelfTest {
                 if (res != net.minecraft.world.InteractionResult.PASS) {
                     bad.add("OFF_HAND 未返回 PASS: " + block + " -> " + res);
                 }
+            }
+            // 4. 容器清空再替换不得爆出掉落物（防建岛补铺/清理时箱子炸物资）
+            var testPos = new net.minecraft.core.BlockPos(0, 120, 0);
+            var oldState = classic.getBlockState(testPos);
+            classic.setBlockAndUpdate(testPos, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            if (classic.getBlockEntity(testPos) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity chest) {
+                chest.setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+                chest.clearContent();
+            }
+            classic.setBlockAndUpdate(testPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            var drops = classic.getEntitiesOfClass(
+                    net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(testPos).inflate(1.5));
+            if (!drops.isEmpty()) {
+                bad.add("清空容器后仍爆出掉落物: " + drops.size());
+                drops.forEach(net.minecraft.world.entity.Entity::discard);
+            }
+            if (!oldState.isAir()) {
+                classic.setBlockAndUpdate(testPos, oldState);
+            }
+        }
+        // 5. 海岛岩浆海下界：液面 Y=63、关闭含水层（开阔岩浆海且无顶层基岩）
+        var oceanNether = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_ocean_nether")));
+        if (oceanNether != null
+                && oceanNether.getChunkSource().getGenerator() instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator ncg) {
+            var s = ncg.generatorSettings().value();
+            if (s.seaLevel() != LavaSeaGenerator.LAVA_SEA_LEVEL || s.aquifersEnabled()) {
+                bad.add("岩浆海下界设置异常: seaLevel=" + s.seaLevel() + ", aquifers=" + s.aquifersEnabled());
             }
         }
         if (bad.isEmpty()) {
@@ -7583,9 +7662,9 @@ public final class SelfTest {
         var oceanNetherLevel = oceanNether == null ? null
                 : skyblock.entryOf(oceanNether).map(SubServer.Entry::level).orElse(null);
         if (oceanNetherLevel != null) {
-            okOrFail(oceanNetherLevel.getSeaLevel() >= 90,
+            okOrFail(oceanNetherLevel.getSeaLevel() == LavaSeaGenerator.LAVA_SEA_LEVEL,
                     "海岛下界是岩浆海（液面 Y=" + oceanNetherLevel.getSeaLevel()
-                            + "，原版下界是 32）",
+                            + "，无顶层基岩，原版下界是 32）",
                     "海岛下界的液面是 " + oceanNetherLevel.getSeaLevel()
                             + " —— 岩浆海预设没生效（可能回落成了原版或虚空）");
         } else {

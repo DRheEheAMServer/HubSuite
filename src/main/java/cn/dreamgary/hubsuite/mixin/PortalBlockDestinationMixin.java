@@ -191,6 +191,7 @@ public abstract class PortalBlockDestinationMixin {
 
         BlockUtil.FoundRectangle rect;
         Optional<BlockPos> existing = forcer.findClosestPortalPosition(scaledPos, isNether, border);
+        boolean isNewPortal = existing.isEmpty();
         if (existing.isPresent()) {
             BlockPos pos = existing.get();
             BlockState state = level.getBlockState(pos);
@@ -215,12 +216,10 @@ public abstract class PortalBlockDestinationMixin {
         /*
          * 特殊下界（空岛/海岛那两座）：在门下面补一座**全下界岩**的小岛。
          *
-         * 用户要求："在地狱门的生成位置下面生成一个小岛屿，全部都是地狱岩"。
-         * 空岛式的下界是纯虚空，没有这座小岛玩家一出门就往下掉；
-         * 岩浆海下界也一样，出门就是岩浆。
+         * 仅在新建传送门或门下缺乏稳固落脚点时补铺，且绝不覆盖黑曜石门框、传送门方块或玩家方块。
          */
         if (isNether && PortalLinks.isIslandNether(level.dimension())) {
-            this.hubsuite$buildNetherIsland(level, rect.minCorner);
+            this.hubsuite$buildNetherIsland(level, rect.minCorner, isNewPortal);
         }
 
         BlockPos min = rect.minCorner;
@@ -254,10 +253,27 @@ public abstract class PortalBlockDestinationMixin {
      * <p>遇到没加载的区块**直接跳过那一列**：{@code setBlock} 会同步把区块拉起来，
      * 在主线程上就是看门狗风险（本项目踩过）。
      */
-    private void hubsuite$buildNetherIsland(ServerLevel level, BlockPos portalMin) {
+    private void hubsuite$buildNetherIsland(ServerLevel level, BlockPos portalMin, boolean isNewPortal) {
         try {
             int radius = 3;
             int baseY = portalMin.getY() - 1;
+            if (!isNewPortal) {
+                // 已有传送门且周围已有稳固落脚点时直接跳过，避免覆盖玩家建筑
+                boolean needsSupport = false;
+                for (int dx = -1; dx <= 1 && !needsSupport; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        BlockPos check = new BlockPos(portalMin.getX() + dx, baseY, portalMin.getZ() + dz);
+                        BlockState st = level.getBlockState(check);
+                        if (st.isAir() || !st.getFluidState().isEmpty()) {
+                            needsSupport = true;
+                            break;
+                        }
+                    }
+                }
+                if (!needsSupport) {
+                    return;
+                }
+            }
             int placed = 0;
             int skipped = 0;
             for (int dx = -radius; dx <= radius; dx++) {
@@ -272,9 +288,29 @@ public abstract class PortalBlockDestinationMixin {
                         continue;
                     }
                     for (int dy = 0; dy >= -2; dy--) {
-                        level.setBlock(new BlockPos(x, baseY + dy, z),
-                                net.minecraft.world.level.block.Blocks.NETHERRACK.defaultBlockState(), 3);
-                        placed++;
+                        BlockPos target = new BlockPos(x, baseY + dy, z);
+                        BlockState existing = level.getBlockState(target);
+                        if (existing.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
+                                || existing.is(net.minecraft.world.level.block.Blocks.NETHER_PORTAL)) {
+                            continue;
+                        }
+                        if (existing.isAir() || !existing.getFluidState().isEmpty()
+                                || existing.is(net.minecraft.world.level.block.Blocks.FIRE)) {
+                            level.setBlock(target,
+                                    net.minecraft.world.level.block.Blocks.NETHERRACK.defaultBlockState(), 3);
+                            placed++;
+                        }
+                    }
+                    if (isNewPortal && Math.abs(dx) <= 2 && Math.abs(dz) <= 2) {
+                        for (int dy = 0; dy <= 2; dy++) {
+                            BlockPos head = new BlockPos(x, portalMin.getY() + dy, z);
+                            BlockState headState = level.getBlockState(head);
+                            if (!headState.isAir()
+                                    && !headState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
+                                    && !headState.is(net.minecraft.world.level.block.Blocks.NETHER_PORTAL)) {
+                                level.setBlock(head, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+                            }
+                        }
                     }
                 }
             }
