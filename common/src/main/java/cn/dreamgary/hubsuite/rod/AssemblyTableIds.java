@@ -33,6 +33,6 @@ public final class AssemblyTableIds {
     public static Item.Properties itemProperties() {
         return new Item.Properties()
                 .setId(ITEM_KEY)
-                .component(DataComponents.ITEM_NAME, Component.translatable("block.hubsuite.assembly_table"));
+                .useBlockDescriptionPrefix();
     }
 }

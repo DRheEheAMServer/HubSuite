@@ -47,20 +47,26 @@ public final class HubSuiteCreativeTabs {
     public static final String TITLE_KEY = "itemGroup.hubsuite.main";
 
     /** 标签页里放什么（按 id，两端各自解析成自己那份物品）。 */
-    private static final List<Identifier> CONTENT_IDS = List.of(
-            HubSuiteItemDefs.NETHER_STRING.id(),
-            HubSuiteItemDefs.WOODEN_FISHING_BUCKET.id(),
-            HubSuiteItemDefs.IRON_FISHING_BUCKET.id(),
-            HubSuiteItemDefs.DIAMOND_FISHING_BUCKET.id(),
-            AssemblyTableIds.ID,
-            cn.dreamgary.hubsuite.magic.MagicIds.MOON_ALTAR,
-            cn.dreamgary.hubsuite.magic.MagicIds.MAGIC_PEDESTAL,
-            cn.dreamgary.hubsuite.magic.MagicIds.LUNAR_VOID_ALTAR,
-            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CRYSTAL,
-            cn.dreamgary.hubsuite.magic.MagicIds.MOON_CRYSTAL,
-            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CORE,
-            cn.dreamgary.hubsuite.magic.MagicIds.MOONWING_STAFF,
-            cn.dreamgary.hubsuite.magic.MagicIds.VOID_CHARM);
+    private static final List<Identifier> CONTENT_IDS = buildContentIds();
+
+    private static List<Identifier> buildContentIds() {
+        List<Identifier> ids = new ArrayList<>();
+        ids.add(HubSuiteItemDefs.NETHER_STRING.id());
+        ids.add(HubSuiteItemDefs.WOODEN_FISHING_BUCKET.id());
+        ids.add(HubSuiteItemDefs.IRON_FISHING_BUCKET.id());
+        ids.add(HubSuiteItemDefs.DIAMOND_FISHING_BUCKET.id());
+        ids.add(AssemblyTableIds.ID);
+        ids.add(HubSuiteItemDefs.BASIC_BAIT.id());
+        ids.add(HubSuiteItemDefs.REFINED_BAIT.id());
+        ids.add(HubSuiteItemDefs.ABYSSAL_BAIT.id());
+        ids.add(HubSuiteItemDefs.EMBER_BAIT.id());
+        ids.add(HubSuiteItemDefs.MAGMA_BAIT.id());
+        ids.add(HubSuiteItemDefs.INFERNAL_BAIT.id());
+        ids.add(HubSuiteItemDefs.TREASURE_BAIT.id());
+        ids.add(HubSuiteItemDefs.TWIN_BAIT.id());
+        ids.addAll(cn.dreamgary.hubsuite.magic.MagicIds.ALL_ITEMS);
+        return List.copyOf(ids);
+    }
 
     private HubSuiteCreativeTabs() {
     }

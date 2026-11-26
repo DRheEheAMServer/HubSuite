@@ -19,15 +19,20 @@ public final class MagicTooltip {
         List<Component> lines = new ArrayList<>();
         MagicEnergyData data = MagicEnergyData.of(stack);
 
-        if (MagicIds.MOON_CRYSTAL.equals(itemId)) {
-            MagicEnergyData d = data != null ? data : MagicEnergyData.emptyMoonCrystal();
+        if (MagicIds.MOON_CRYSTAL.equals(itemId) || MagicIds.BLAZING_MOON_CRYSTAL.equals(itemId)) {
+            boolean blazing = MagicIds.BLAZING_MOON_CRYSTAL.equals(itemId);
+            MagicEnergyData d = data != null ? data
+                    : (blazing ? MagicEnergyData.emptyBlazingMoonCrystal() : MagicEnergyData.emptyMoonCrystal());
             lines.add(Component.literal("\u00A7b月光能: \u00A7f" + d.moon() + " / " + d.maxMoon()));
-            if (d.overload() > 0) {
+            if (!blazing && d.overload() > 0) {
                 lines.add(Component.literal("\u00A7c⚠ 日光过载: " + d.overload() + "%（满 100% 将碎裂）"));
             }
             if (shift) {
-                lines.add(Component.literal("\u00A77放上月光祭坛在夜晚吸收月光能"));
-                lines.add(Component.literal("\u00A78白天请收入封闭容器，露天暴晒会过载碎裂"));
+                lines.add(Component.literal("\u00A77放上月光祭坛在夜晚吸收月光能"
+                        + (blazing ? "（充能效率 ×1.5）" : "")));
+                lines.add(Component.literal(blazing
+                        ? "\u00A78炽月晶已淬炼完成，免疫日光过载"
+                        : "\u00A78白天请收入封闭容器，露天暴晒会过载碎裂"));
             } else {
                 lines.add(Component.literal("\u00A78按住 Shift 查看说明"));
             }
@@ -46,16 +51,32 @@ public final class MagicTooltip {
             return lines;
         }
 
-        if (MagicIds.MOONWING_STAFF.equals(itemId) || MagicIds.VOID_CHARM.equals(itemId)) {
-            boolean isStaff = MagicIds.MOONWING_STAFF.equals(itemId);
+        if (MagicIds.LUNAR_SPYGLASS.equals(itemId)) {
+            if (shift) {
+                lines.add(Component.literal("\u00A77右键查看当前月相、月光/虚空倍率与蚀空侵蚀状态"));
+            } else {
+                lines.add(Component.literal("\u00A78按住 Shift 查看说明"));
+            }
+            return lines;
+        }
+
+        boolean moonArtifact = MagicIds.MOONWING_STAFF.equals(itemId)
+                || MagicIds.LUNAR_ANKLET.equals(itemId)
+                || MagicIds.MOON_SIPHON_RING.equals(itemId);
+        boolean voidArtifact = MagicIds.VOID_CHARM.equals(itemId)
+                || MagicIds.VOID_BUILDER_STAFF.equals(itemId)
+                || MagicIds.VOID_BRACER.equals(itemId)
+                || MagicIds.VOID_ANCHOR_CLOAK.equals(itemId);
+        if (moonArtifact || voidArtifact) {
             MagicEnergyData d = data != null ? data : MagicEnergyData.emptyArtifact();
             if (!d.hasGem()) {
                 lines.add(Component.literal("\u00A77镶嵌槽: \u00A78空（未镶嵌"
-                        + (isStaff ? "月光水晶" : "虚空晶核") + "）"));
+                        + (moonArtifact ? "月光水晶 / 炽月晶" : "虚空晶核") + "）"));
             } else if (d.isMoonGem()) {
-                lines.add(Component.literal("\u00A77镶嵌: \u00A7b月光水晶 \u00A7f("
-                        + d.moon() + " / " + d.maxMoon() + ")"));
-                if (d.overload() > 0) {
+                lines.add(Component.literal("\u00A77镶嵌: \u00A7b"
+                        + (d.isBlazingMoon() ? "炽月晶" : "月光水晶")
+                        + " \u00A7f(" + d.moon() + " / " + d.maxMoon() + ")"));
+                if (!d.isBlazingMoon() && d.overload() > 0) {
                     lines.add(Component.literal("\u00A7c⚠ 宝石过载: " + d.overload() + "%（满 100% 仅宝石碎裂）"));
                 }
             } else {
@@ -63,13 +84,22 @@ public final class MagicTooltip {
                         + d.voidEnergy() + " / " + d.maxVoid() + ")"));
             }
             if (shift) {
-                if (isStaff) {
+                if (MagicIds.MOONWING_STAFF.equals(itemId)) {
                     lines.add(Component.literal("\u00A77右键消耗 40 月光能：轻跃 + 6 秒缓降"));
-                    lines.add(Component.literal("\u00A78背包中可用月光水晶直接点击镶嵌；白天暴晒仅碎宝石"));
-                } else {
-                    lines.add(Component.literal("\u00A77被动：摔落前消耗 80 虚空能免伤；右键消耗 20 吸附掉落物"));
-                    lines.add(Component.literal("\u00A78背包中可用虚空晶核直接点击镶嵌；白天露天将流失能量"));
+                } else if (MagicIds.VOID_CHARM.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77饰品/副手（护符）：摔落免伤（80 虚空能），右键吸附掉落物（20）"));
+                } else if (MagicIds.VOID_BUILDER_STAFF.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77右键消耗虚空能：远距辅助建造与方块延伸"));
+                } else if (MagicIds.VOID_BRACER.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77饰品（护腕）：提升方块交互距离（+2.5 / +3.5 格）"));
+                } else if (MagicIds.LUNAR_ANKLET.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77饰品（戒指）：提升跨步高度、安全坠落与轻盈重力"));
+                } else if (MagicIds.VOID_ANCHOR_CLOAK.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77饰品（披风）：Y ≤ -55 坠入虚空时消耗虚空能拉回安全平台"));
+                } else if (MagicIds.MOON_SIPHON_RING.equals(itemId)) {
+                    lines.add(Component.literal("\u00A77饰品（戒指）：夜晚露天自动虹吸月光为所嵌宝石充能"));
                 }
+                lines.add(Component.literal("\u00A78背包中可用对应晶体直接点击镶嵌；按 B 或 /trinket 佩戴饰品"));
             } else {
                 lines.add(Component.literal("\u00A78按住 Shift 查看说明"));
             }

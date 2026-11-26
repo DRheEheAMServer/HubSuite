@@ -191,6 +191,60 @@ public final class SelfTest {
         step("旧熔岩钓竿换算（钩决定岩浆 / 磨损比例照搬 / 配方已删）", this::checkLegacyLavaRod);
         step("原版耐久扣减不碰我们的竿（否则会在坏掉那一刻被销毁）", this::checkRodDurabilityShield);
         step("虚月律魔法系统（月相 / 侵蚀 / 镶嵌 / 碎宝石 / 祭坛配方 / 资源）", this::checkMagicSystem);
+        step("虚月律方块名称、创造栏与祭坛交互回归", this::checkMagicAndItemsRegression);
+    }
+
+    private void checkMagicAndItemsRegression() {
+        var bad = new java.util.ArrayList<String>();
+        // 1. 方块物品描述键必须走 block.hubsuite.*（不能被 MC 26.1 覆盖成 item.hubsuite.*）
+        var blockIds = new java.util.ArrayList<>(cn.dreamgary.hubsuite.magic.MagicIds.ALL_BLOCKS);
+        blockIds.add(cn.dreamgary.hubsuite.rod.AssemblyTableIds.ID);
+        for (var id : blockIds) {
+            var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(id);
+            String expected = "block.hubsuite." + id.getPath();
+            String actual = item.getDescriptionId();
+            if (!expected.equals(actual)) {
+                bad.add("方块名键错误 " + id + ": " + actual + " != " + expected);
+            }
+        }
+        // 2. 创造模式标签页与全量 8 种钓饵 + 魔法物品均已注册
+        if (!net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB
+                .containsKey(cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.MAIN.identifier())) {
+            bad.add("缺少创造模式标签页 " + cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.MAIN.identifier());
+        }
+        for (var def : cn.dreamgary.hubsuite.item.HubSuiteItemDefs.ALL) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(def.id())) {
+                bad.add("缺少定义物品:" + def.id());
+            }
+        }
+        // 3. 祭坛/基座/催生仪对 OFF_HAND 必须返回 PASS（防止主手放上去后副手立刻取回）
+        var classic = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_classic")));
+        if (classic != null) {
+            var pos = new net.minecraft.core.BlockPos(0, 100, 0);
+            var hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                    net.minecraft.core.Direction.UP, pos, false);
+            var blocks = java.util.List.of(
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_VOID_ALTAR,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_ALTAR,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.MAGIC_PEDESTAL,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_BLOOM_TOTEM);
+            for (var block : blocks) {
+                var res = block.defaultBlockState().useItemOn(
+                        new ItemStack(Items.AMETHYST_SHARD), classic, null,
+                        net.minecraft.world.InteractionHand.OFF_HAND, hit);
+                if (res != net.minecraft.world.InteractionResult.PASS) {
+                    bad.add("OFF_HAND 未返回 PASS: " + block + " -> " + res);
+                }
+            }
+        }
+        if (bad.isEmpty()) {
+            ok("方块名键(6)、创造栏与全量物品注册、祭坛副手防弹回校验通过");
+        } else {
+            fail("虚月律/物品回归失败：" + String.join("; ", bad));
+        }
     }
 
     private void checkMagicSystem() {

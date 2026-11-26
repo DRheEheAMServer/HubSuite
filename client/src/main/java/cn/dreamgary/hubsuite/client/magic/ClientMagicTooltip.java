@@ -17,10 +17,7 @@ public final class ClientMagicTooltip {
     public static void register() {
         ItemTooltipCallback.EVENT.register((stack, context, flag, lines) -> {
             Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-            if (!MagicIds.MOON_CRYSTAL.equals(id)
-                    && !MagicIds.VOID_CORE.equals(id)
-                    && !MagicIds.MOONWING_STAFF.equals(id)
-                    && !MagicIds.VOID_CHARM.equals(id)) {
+            if (!MagicIds.ALL_ITEMS.contains(id)) {
                 return;
             }
             var mc = net.minecraft.client.Minecraft.getInstance();

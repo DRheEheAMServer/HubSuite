@@ -7,6 +7,8 @@ import cn.dreamgary.hubsuite.magic.MagicSocketing;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.SlotAccess;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ClickAction;
@@ -15,10 +17,12 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * 客户端侧魔法方块、方块实体类型与物品注册（与服务端 ID 一一对应）。
@@ -30,15 +34,15 @@ public final class ClientMagicRegistry {
 
     public static void register() {
         Block moonAltar = Registry.register(BuiltInRegistries.BLOCK, MagicIds.MOON_ALTAR,
-                new Block(MagicIds.altarBlockProps(MagicIds.MOON_ALTAR)));
+                new ClientInteractiveBlock(MagicIds.altarBlockProps(MagicIds.MOON_ALTAR)));
         Block pedestal = Registry.register(BuiltInRegistries.BLOCK, MagicIds.MAGIC_PEDESTAL,
-                new Block(MagicIds.altarBlockProps(MagicIds.MAGIC_PEDESTAL)));
+                new ClientInteractiveBlock(MagicIds.altarBlockProps(MagicIds.MAGIC_PEDESTAL)));
         Block lunarVoidAltar = Registry.register(BuiltInRegistries.BLOCK, MagicIds.LUNAR_VOID_ALTAR,
-                new Block(MagicIds.altarBlockProps(MagicIds.LUNAR_VOID_ALTAR)));
+                new ClientInteractiveBlock(MagicIds.altarBlockProps(MagicIds.LUNAR_VOID_ALTAR)));
         Block voidCrystal = Registry.register(BuiltInRegistries.BLOCK, MagicIds.VOID_CRYSTAL,
                 new Block(MagicIds.voidCrystalBlockProps()));
         Block bloomTotem = Registry.register(BuiltInRegistries.BLOCK, MagicIds.LUNAR_BLOOM_TOTEM,
-                new Block(MagicIds.altarBlockProps(MagicIds.LUNAR_BLOOM_TOTEM)));
+                new ClientInteractiveBlock(MagicIds.altarBlockProps(MagicIds.LUNAR_BLOOM_TOTEM)));
 
         MagicBlockEntities.registerAll(
                 moonAltar, (pos, st) -> new ClientStubBlockEntity(MagicBlockEntities.MOON_ALTAR, pos, st),
@@ -83,6 +87,24 @@ public final class ClientMagicRegistry {
                 new ClientSocketableItem(MagicIds.carrierItemProps(MagicIds.MOON_SIPHON_RING, Rarity.RARE), true));
 
         HubSuiteClient.LOGGER.info("已注册客户端魔法方块与物品（5 方块 / 11 物品）");
+    }
+
+    private static final class ClientInteractiveBlock extends Block {
+        ClientInteractiveBlock(Properties properties) {
+            super(properties);
+        }
+
+        @Override
+        protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
+                                                   Player player, BlockHitResult hit) {
+            return InteractionResult.SUCCESS;
+        }
+
+        @Override
+        protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand, BlockHitResult hit) {
+            return hand == InteractionHand.MAIN_HAND ? InteractionResult.SUCCESS : InteractionResult.PASS;
+        }
     }
 
     private static final class ClientStubBlockEntity extends BlockEntity {

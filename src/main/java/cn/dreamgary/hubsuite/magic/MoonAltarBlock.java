@@ -64,6 +64,9 @@ public class MoonAltarBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                           Player player, InteractionHand hand, BlockHitResult hit) {
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
         return interact(level, pos, player, hand, stack);
     }
 
@@ -108,7 +111,7 @@ public class MoonAltarBlock extends BaseEntityBlock {
             sp.sendSystemMessage(Component.literal("\u00A7c月光祭坛只能承托含月光能的载体或法器。"), true);
             return InteractionResult.CONSUME;
         }
-        ItemStack one = handStack.split(1);
+        ItemStack one = sp.hasInfiniteMaterials() ? handStack.copyWithCount(1) : handStack.split(1);
         be.setHeld(one);
         level.playSound(null, pos, SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.BLOCKS, 0.7F, 1.2F);
         return InteractionResult.CONSUME;

@@ -35,6 +35,7 @@ public final class HubSuiteClient implements ClientModInitializer {
         ClientRodTooltip.register();   // 钓竿 tooltip：平时看总数，Shift 看部件明细
         cn.dreamgary.hubsuite.client.magic.ClientMagicTooltip.register();
         ClientTrinketUi.register();
+        ClientUpdateChecker.register();
 
         // 开发调试工具仅在开发环境启用（生产客户端 JAR 已剔除 Dev*.class）
         if (FabricLoader.getInstance().isDevelopmentEnvironment()) {

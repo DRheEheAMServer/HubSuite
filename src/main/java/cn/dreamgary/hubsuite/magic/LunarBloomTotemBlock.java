@@ -63,6 +63,9 @@ public class LunarBloomTotemBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                           Player player, InteractionHand hand, BlockHitResult hit) {
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
         return interact(level, pos, player, stack);
     }
 
@@ -95,7 +98,8 @@ public class LunarBloomTotemBlock extends BaseEntityBlock {
             sp.sendSystemMessage(Component.literal("\u00A7c月华催生仪只接受含月光能的晶体。"), true);
             return InteractionResult.CONSUME;
         }
-        be.setHeld(handStack.split(1));
+        ItemStack one = sp.hasInfiniteMaterials() ? handStack.copyWithCount(1) : handStack.split(1);
+        be.setHeld(one);
         level.playSound(null, pos, SoundEvents.END_PORTAL_FRAME_FILL, SoundSource.BLOCKS, 0.7F, 1.3F);
         return InteractionResult.CONSUME;
     }

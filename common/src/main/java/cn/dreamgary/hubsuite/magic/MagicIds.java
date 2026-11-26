@@ -76,8 +76,7 @@ public final class MagicIds {
     public static Item.Properties blockItemProps(Identifier id) {
         return new Item.Properties()
                 .setId(ResourceKey.create(Registries.ITEM, id))
-                .component(DataComponents.ITEM_NAME,
-                        Component.translatable("block.hubsuite." + id.getPath()))
+                .useBlockDescriptionPrefix()
                 .component(DataComponents.ITEM_MODEL, id);
     }
 

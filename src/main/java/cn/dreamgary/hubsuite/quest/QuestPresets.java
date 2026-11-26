@@ -147,6 +147,42 @@ public final class QuestPresets {
                 "minecraft:ladder", "reach_y:120", 1,
                 "minecraft:golden_apple*2"));
 
+        // ── 里程碑：经典空岛·虚月律 ──
+        quests.add(milestone("magic_moon_altar", "§b月华初启",
+                "制作一座月光祭坛（夜晚露天可为月光水晶充能）",
+                "hubsuite:moon_altar", "have:hubsuite:moon_altar", 1,
+                "hubsuite:moon_crystal*1", "minecraft:amethyst_shard*4"));
+
+        quests.add(milestoneReq("magic_moon_crystal", "§b凝月成晶",
+                "获得月光水晶并放上月光祭坛吸收月光能",
+                "hubsuite:moon_crystal", "have:hubsuite:moon_crystal", 1,
+                "magic_moon_altar",
+                "minecraft:lapis_lazuli*8", "minecraft:gold_ingot*4"));
+
+        quests.add(milestoneReq("magic_pedestals", "§d星阵基座",
+                "准备 4 座魔法基座（环绕虚月祭坛承托配材与供能晶体）",
+                "hubsuite:magic_pedestal", "have:hubsuite:magic_pedestal", 4,
+                "magic_moon_crystal",
+                "hubsuite:magic_pedestal*4", "minecraft:amethyst_shard*4"));
+
+        quests.add(milestoneReq("magic_lunar_void_altar", "§5虚月祭坛",
+                "制作虚月祭坛（在经典空岛配合 8 座基座按月相启动仪式，可用 JEI 查配方）",
+                "hubsuite:lunar_void_altar", "have:hubsuite:lunar_void_altar", 1,
+                "magic_pedestals",
+                "hubsuite:lunar_spyglass*1"));
+
+        quests.add(milestoneReq("magic_void_core", "§5深渊汲虚",
+                "在经典空岛 Y≤-48 深渊收集蚀空凝晶并获得虚空晶核",
+                "hubsuite:void_core", "have:hubsuite:void_core", 1,
+                "magic_lunar_void_altar",
+                "minecraft:ender_pearl*4", "minecraft:amethyst_shard*8"));
+
+        quests.add(milestoneReq("magic_trinket_resonance", "§6虚月饰品",
+                "获得虚空护符（按 B 键或 /trinket 佩戴饰品，月/虚空 1:1 佩戴触发 -25% 能耗共鸣）",
+                "hubsuite:void_charm", "have:hubsuite:void_charm", 1,
+                "magic_void_core",
+                "hubsuite:blazing_moon_crystal*1"));
+
         // ── 可重复交付 ──
         quests.add(deliver("deliver_cobble", "§7收石头", "交 64 个圆石换一颗钻石",
                 "minecraft:diamond", "minecraft:cobblestone", 64,
@@ -183,6 +219,13 @@ public final class QuestPresets {
     private static Quest milestone(String id, String name, String description, String icon,
                                    String goal, int amount, String... rewards) {
         return build(Quest.Kind.MILESTONE, id, name, description, icon, goal, amount, rewards);
+    }
+
+    private static Quest milestoneReq(String id, String name, String description, String icon,
+                                      String goal, int amount, String requires, String... rewards) {
+        Quest quest = build(Quest.Kind.MILESTONE, id, name, description, icon, goal, amount, rewards);
+        quest.requires = requires == null ? "" : requires;
+        return quest;
     }
 
     private static Quest deliver(String id, String name, String description, String icon,

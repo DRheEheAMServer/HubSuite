@@ -64,6 +64,9 @@ public class MagicPedestalBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                           Player player, InteractionHand hand, BlockHitResult hit) {
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResult.PASS;
+        }
         return interact(level, pos, player, stack);
     }
 
@@ -90,7 +93,7 @@ public class MagicPedestalBlock extends BaseEntityBlock {
         if (handStack.isEmpty()) {
             return InteractionResult.PASS;
         }
-        ItemStack one = handStack.split(1);
+        ItemStack one = sp.hasInfiniteMaterials() ? handStack.copyWithCount(1) : handStack.split(1);
         be.setHeld(one);
         level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 0.7F, 1.1F);
         return InteractionResult.CONSUME;
