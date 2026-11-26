@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " O ",
+    "OEO",
+    " O "
+  ],
+  "key": {
+    "O": "minecraft:obsidian",
+    "E": "minecraft:ender_pearl"
+  },
+  "result": {
+    "id": "hubsuite:void_core",
+    "count": 1
+  }
+}

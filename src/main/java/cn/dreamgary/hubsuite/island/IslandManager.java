@@ -686,9 +686,6 @@ public final class IslandManager {
                     for (int dz = -radius; dz <= radius; dz++) {
                         var pos = center.offset(dx, dy, dz);
                         BlockState state = level.getBlockState(pos);
-                        if (state.isAir()) {
-                            continue;
-                        }
                         if (target.is(Blocks.WATER)
                                 && !state.getFluidState().isEmpty()) {
                             continue;   // 已经是水，别重复写
@@ -696,6 +693,7 @@ public final class IslandManager {
                         if (!target.is(Blocks.WATER) && state.is(Blocks.AIR)) {
                             continue;
                         }
+                        clearBlockEntity(level, pos);
                         level.setBlock(pos, target, flags);
                         cleared++;
                     }
@@ -892,6 +890,16 @@ public final class IslandManager {
             paintLayers(level, center, baseY, radius, layers, deadline, overBudget);
         }
 
+        if (overBudget[0]) {
+            // 超时中断了 → 在放箱子/种树前提前返回，绝不能把半成品标成"已铺"，
+            // 也不提前放箱子，避免下 tick 补铺时替换箱子把物资爆出来。
+            HubSuite.logger().warn(
+                    "方格({}, {}) 地形未铺完（超出 {} ms 预算），已登记待补铺",
+                    island.plotX, island.plotZ, GENERATE_BUDGET_MS);
+            pendingTerrain.add(island.player);
+            return false;
+        }
+
 
         // 2) 清空"玩家落脚点"周围的悬空空间（必须在种树之前，否则会把树干挖掉）
         BlockPos spawnPos = center.offset(0, SPAWN_OFFSET_Y, 0);
@@ -915,9 +923,11 @@ public final class IslandManager {
         //     现在两者固定错开，并且放之前先清空那一格。
         if (type.chest) {
             BlockPos chestPos = center.offset(CHEST_OFFSET_X, 1, CHEST_OFFSET_Z);
-            // 先清空（含上方），避免被树叶/树干占用
+            // 先清空（含上方），避免被树叶/树干占用；若原位置有容器先清内容防爆物
             for (int dy = 0; dy <= 1; dy++) {
-                level.setBlockAndUpdate(chestPos.offset(0, dy, 0), Blocks.AIR.defaultBlockState());
+                BlockPos target = chestPos.offset(0, dy, 0);
+                clearBlockEntity(level, target);
+                level.setBlockAndUpdate(target, Blocks.AIR.defaultBlockState());
             }
             level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
             if (level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest) {
@@ -973,16 +983,6 @@ public final class IslandManager {
                     state.getBlock().getName().getString(), radius, layers.size());
         }
 
-        if (overBudget[0]) {
-            // 超时中断了 → 绝不能标记成"已铺"。
-            // 标记了的话 ensureTerrain 之后永远早退，"以后再补"永远不会发生，
-            // 玩家会永久得到一座半成品岛（甚至表层没铺、人直接掉下去）。
-            HubSuite.logger().warn(
-                    "方格({}, {}) 地形未铺完（超出 {} ms 预算），已登记待补铺",
-                    island.plotX, island.plotZ, GENERATE_BUDGET_MS);
-            pendingTerrain.add(island.player);
-            return false;
-        }
         // 地形铺好后，岛附近**不需要**手工补放海洋结构。
         //
         // 这里原来有一段"定向补放沉船/海底废墟"（OceanStructures）：当时的想法是
@@ -1095,7 +1095,7 @@ public final class IslandManager {
         double p2 = rng.nextDouble() * Math.PI * 2;
         double p3 = rng.nextDouble() * Math.PI * 2;
 
-        int outer = radius + OCEAN_SKIRT_RINGS;
+        int outer = (int) Math.ceil(radius + OCEAN_SHORE_WOBBLE_MAX + OCEAN_SKIRT_RINGS);
         int dry = 0;
         int shelf = 0;
         long started = System.currentTimeMillis();
@@ -1335,10 +1335,18 @@ public final class IslandManager {
                 for (int dz = -radius; dz <= radius; dz++) {
                     var pos = base.offset(dx, dy, dz);
                     if (!level.getBlockState(pos).isAir()) {
+                        clearBlockEntity(level, pos);
                         level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
                     }
                 }
             }
+        }
+    }
+
+    /** 替换/清除方块前先清空容器内容，避免原版在破坏方块时把物资爆到地上。 */
+    private static void clearBlockEntity(ServerLevel level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof net.minecraft.world.Clearable clearable) {
+            clearable.clearContent();
         }
     }
 
@@ -1427,8 +1435,16 @@ public final class IslandManager {
 
     /** 把方块 id 编码成一个 int（高位是注册表 id），避免在配置里存对象。 */
     private int parseBlockId(String id) {
+        if (id == null || id.isBlank()) {
+            return -1;
+        }
+        var parsed = net.minecraft.resources.Identifier.tryParse(id.trim());
+        if (parsed == null) {
+            HubSuite.logger().warn("非法的方块 id：{}", id);
+            return -1;
+        }
         var registry = level.getServer().registryAccess().lookupOrThrow(Registries.BLOCK);
-        var key = ResourceKey.create(Registries.BLOCK, net.minecraft.resources.Identifier.parse(id));
+        var key = ResourceKey.create(Registries.BLOCK, parsed);
         return registry.get(key).map(h -> registry.getId(h.value())).orElse(-1);
     }
 
@@ -1459,13 +1475,24 @@ public final class IslandManager {
                     amount = 1;
                 }
             }
-            var key = ResourceKey.create(Registries.ITEM, net.minecraft.resources.Identifier.parse(id));
+            var parsed = net.minecraft.resources.Identifier.tryParse(id.trim());
+            if (parsed == null) {
+                HubSuite.logger().warn("岛型 {} 的物资 '{}' id 非法，已忽略。", type.id, id);
+                continue;
+            }
+            var key = ResourceKey.create(Registries.ITEM, parsed);
             Item item = registry.get(key).map(h -> h.value()).orElse(null);
             if (item == null || item == Items.AIR) {
                 HubSuite.logger().warn("岛型 {} 的物资 '{}' 不存在，已忽略。", type.id, id);
                 continue;
             }
-            result.add(new ItemStack(item, Math.min(amount, item.getDefaultMaxStackSize() * 4)));
+            int maxStack = Math.max(1, item.getDefaultMaxStackSize());
+            int remaining = Math.min(amount, maxStack * 4);
+            while (remaining > 0) {
+                int part = Math.min(remaining, maxStack);
+                result.add(new ItemStack(item, part));
+                remaining -= part;
+            }
         }
         return result;
     }
@@ -1498,14 +1525,25 @@ public final class IslandManager {
             }
             HubSuite.logger().info("已载入空岛归属：{} 座。", islands.size());
         } catch (Exception e) {
-            HubSuite.logger().error("载入空岛归属失败", e);
+            HubSuite.logger().error("载入空岛归属失败（已尝试备份损坏文件）：{}", storeFile, e);
+            backupCorruptFile(storeFile);
+        }
+    }
+
+    private static void backupCorruptFile(Path file) {
+        try {
+            if (Files.exists(file)) {
+                Path backup = file.resolveSibling(file.getFileName() + ".corrupt-" + System.currentTimeMillis());
+                Files.move(file, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception ignored) {
         }
     }
 
     public void save() {
         try {
             Files.createDirectories(storeFile.getParent());
-            Path tmp = storeFile.resolveSibling("islands.json.tmp");
+            Path tmp = storeFile.resolveSibling(storeFile.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
                 GSON.toJson(islands, writer);
             }

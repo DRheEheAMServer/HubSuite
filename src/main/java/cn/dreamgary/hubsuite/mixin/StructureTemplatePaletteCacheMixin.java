@@ -68,25 +68,19 @@ public abstract class StructureTemplatePaletteCacheMixin {
     private Object hubsuite$threadSafeComputeIfAbsent(Map<Object, Object> map, Object key,
                                                       Function<Object, Object> mappingFunction,
                                                       Operation<Object> original) {
-        Object cached = map.get(key);
-        if (cached != null) {
-            return cached;
+        synchronized (map) {
+            Object cached = map.get(key);
+            if (cached != null) {
+                return cached;
+            }
         }
         Object computed = mappingFunction.apply(key);
         if (computed == null) {
             return null;   // 与原版一致：null 结果不进缓存
         }
-        try {
+        synchronized (map) {
             Object existing = map.putIfAbsent(key, computed);
             return existing != null ? existing : computed;
-        } catch (Throwable t) {
-            /*
-             * 兜底：底层仍是 HashMap，putIfAbsent 是"默认方法"，并发下理论上
-             * 仍可能因扩容而抛异常。这时**放弃缓存**、直接用算出来的值 ——
-             * 代价是下次再算一遍（模板解析很快），但绝不让服务端因为这个崩掉。
-             * 原版正是在这里抛 ConcurrentModificationException 把整个服务端带崩的。
-             */
-            return computed;
         }
     }
 }

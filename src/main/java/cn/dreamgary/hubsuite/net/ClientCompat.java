@@ -60,6 +60,18 @@ public final class ClientCompat {
      *
      * <p>{@code ok=false} 覆盖两种情形：没应答（没装 / 太老 / 超时）与应答了但版本不达标。
      */
+    /**
+     * 客户端**合格吗**：协议号一致 + 版本不低于要求。
+     *
+     * <p>审计抓到的漏洞就是这里被写成了"只要收到应答就算合格"，
+     * 于是协议 / 版本不对时 enforce 也不踢人。判定必须走这个函数。
+     */
+    public static boolean acceptable(ClientInfo info, int protocol, String minClientVersion) {
+        return info != null
+                && info.protocol() == protocol
+                && ClientVersions.atLeast(info.version(), minClientVersion);
+    }
+
     public static Action decide(Mode mode, boolean ok) {
         if (mode == null || mode == Mode.OFF || ok) {
             return Action.ALLOW;
@@ -80,9 +92,16 @@ public final class ClientCompat {
     public void register() {
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Hello.TYPE, HandshakePayloads.Hello.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Welcome.TYPE, HandshakePayloads.Welcome.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(
+                LavaHookSyncPayload.LavaHookSync.TYPE, LavaHookSyncPayload.LavaHookSync.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayloads.HelloAck.TYPE, HandshakePayloads.HelloAck.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayloads.HelloAck.TYPE, this::onAck);
+        PayloadTypeRegistry.serverboundPlay().register(
+                cn.dreamgary.hubsuite.net.UiActionPayload.UiAction.TYPE,
+                cn.dreamgary.hubsuite.net.UiActionPayload.UiAction.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(
+                cn.dreamgary.hubsuite.net.UiActionPayload.UiAction.TYPE, this::onUiAction);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> onJoin(handler.getPlayer()));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> onQuit(handler.getPlayer()));
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
@@ -104,12 +123,30 @@ public final class ClientCompat {
         }
         if (!ServerPlayNetworking.canSend(player, HandshakePayloads.Hello.TYPE)) {
             // 客户端没有声明这个频道 = 没装客户端模组（旧版客户端也一样）。
-            apply(player, null, "客户端没有声明握手频道（没装客户端模组？）");
+            apply(player, null, false, "客户端没有声明握手频道（没装客户端模组？）");
             return;
         }
         waiting.put(player.getUUID(), Math.max(1, config.timeoutSeconds) * 20);
         ServerPlayNetworking.send(player, new HandshakePayloads.Hello(
                 HandshakePayloads.PROTOCOL, serverVersion(), safeMin(), config.timeoutSeconds));
+    }
+
+    /** 通用界面按钮：装配台的「装配」或客户端请求打开虚月饰品栏。 */
+    private void onUiAction(cn.dreamgary.hubsuite.net.UiActionPayload.UiAction payload,
+                            ServerPlayNetworking.Context context) {
+        ServerPlayer player = context.player();
+        if (player == null) {
+            return;
+        }
+        if (cn.dreamgary.hubsuite.trinket.TrinketMenu.ID.toString().equals(payload.menu())
+                && "open".equals(payload.action())) {
+            cn.dreamgary.hubsuite.trinket.TrinketStorage.openMenu(player);
+            return;
+        }
+        if (player.containerMenu instanceof cn.dreamgary.hubsuite.rod.AssemblyMenu menu
+                && cn.dreamgary.hubsuite.rod.AssemblyMenu.ID.toString().equals(payload.menu())) {
+            menu.applyFromButton();
+        }
     }
 
     private void onAck(HandshakePayloads.HelloAck payload, ServerPlayNetworking.Context context) {
@@ -123,11 +160,16 @@ public final class ClientCompat {
         boolean protocolOk = info.protocol() == HandshakePayloads.PROTOCOL;
         boolean versionOk = ClientVersions.atLeast(info.version(), safeMin());
         if (!protocolOk) {
-            apply(player, info, "协议号不一致（服务端 " + HandshakePayloads.PROTOCOL + "，客户端 " + info.protocol() + "）");
+            apply(player, info, false,
+                    "协议号不一致（服务端 " + HandshakePayloads.PROTOCOL + "，客户端 " + info.protocol() + "）");
             return;
         }
         if (!versionOk) {
-            apply(player, info, "客户端版本低于服务端要求");
+            apply(player, info, false, "客户端版本低于服务端要求（要求 ≥ " + safeMin() + "，实际 " + info.version() + "）");
+            return;
+        }
+        if (!acceptable(info, HandshakePayloads.PROTOCOL, safeMin())) {
+            apply(player, info, false, "客户端未达到握手要求");
             return;
         }
         known.put(player.getUUID(), info);
@@ -166,7 +208,7 @@ public final class ClientCompat {
             it.remove();
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player != null) {
-                apply(player, null, "等了 " + Math.max(1, config.timeoutSeconds) + " 秒没有收到客户端应答");
+                apply(player, null, false, "等了 " + Math.max(1, config.timeoutSeconds) + " 秒没有收到客户端应答");
             }
         }
     }
@@ -188,6 +230,16 @@ public final class ClientCompat {
         return known.size();
     }
 
+    /** 自检用：已通过校验的玩家 UUID（真客户端正常；假人不该出现在里面）。 */
+    public java.util.Set<UUID> knownIds() {
+        return java.util.Set.copyOf(known.keySet());
+    }
+
+    /** 自检用：还在等应答的玩家 UUID。 */
+    public java.util.Set<UUID> waitingIds() {
+        return java.util.Set.copyOf(waiting.keySet());
+    }
+
     public int waitingCount() {
         return waiting.size();
     }
@@ -198,8 +250,15 @@ public final class ClientCompat {
 
     // ------------------------------------------------------------------
 
-    private void apply(ServerPlayer player, ClientInfo info, String why) {
-        Action action = decide(config.modeOf(), info != null);
+    /**
+     * 按"这个客户端**合格吗**"决定提示 / 踢出。
+     *
+     * <p><b>审计抓到的漏洞</b>：以前这里传的是 {@code info != null}（"有没有收到应答"），
+     * 于是协议号 / 版本不对时也会被当成合格 → enforce 模式**根本不踢人**。
+     * 现在由调用方明确传 {@code acceptable}（协议对 + 版本够 + 频道声明过）。
+     */
+    private void apply(ServerPlayer player, ClientInfo info, boolean acceptable, String why) {
+        Action action = decide(config.modeOf(), acceptable);
         if (action == Action.ALLOW) {
             return;
         }
@@ -226,34 +285,6 @@ public final class ClientCompat {
         return sb.toString();
     }
 
-    /**
-     * 这一份数据是发给"装了客户端模组且支持真物品"的玩家吗？
-     *
-     * <p>给 Polymer 的 per-player 分支用（见 {@code HubSuiteSimpleItem}）：
-     * 支持 → 发真物品；否则 → 保持原版映射。判定不了（拿不到玩家）时一律返回 false，
-     * 也就是**保守地退回原版映射** —— 宁可少显示，不能发一个客户端不认识的 id。
-     */
-    public static boolean useRealItems(net.fabricmc.fabric.api.networking.v1.context.PacketContext context) {
-        ServerPlayer player = playerOf(context);
-        if (player == null) {
-            return false;
-        }
-        ClientCompat compat = HubSuite.clients();
-        return compat != null && compat.supports(player, HandshakePayloads.CAP_REAL_ITEMS);
-    }
-
-    private static ServerPlayer playerOf(net.fabricmc.fabric.api.networking.v1.context.PacketContext context) {
-        if (context == null) {
-            return null;
-        }
-        MinecraftServer server = context.orElse(net.fabricmc.fabric.api.networking.v1.context.PacketContext.SERVER_INSTANCE, null);
-        com.mojang.authlib.GameProfile profile =
-                context.orElse(net.fabricmc.fabric.api.networking.v1.context.PacketContext.GAME_PROFILE, null);
-        if (server == null || profile == null) {
-            return null;
-        }
-        return server.getPlayerList().getPlayer(profile.id());
-    }
 
     private static boolean isFake(ServerPlayer player) {
         return player instanceof cn.dreamgary.hubsuite.fake.MarkedFakePlayer;

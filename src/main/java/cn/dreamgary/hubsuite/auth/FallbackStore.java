@@ -48,7 +48,7 @@ final class FallbackStore {
         return file;
     }
 
-    void load() {
+    synchronized void load() {
         try {
             if (Files.exists(file)) {
                 try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -72,7 +72,7 @@ final class FallbackStore {
         }
     }
 
-    void save() {
+    synchronized void save() {
         try {
             Files.createDirectories(file.getParent());
             writeAtomic(file, accounts);
@@ -83,7 +83,7 @@ final class FallbackStore {
     }
 
     private void writeAtomic(Path target, Object data) throws Exception {
-        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Path tmp = Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp");
         try (Writer w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
             GSON.toJson(data, w);
         }
@@ -94,17 +94,17 @@ final class FallbackStore {
         }
     }
 
-    Optional<AuthStore.Account> find(String username) {
+    synchronized Optional<AuthStore.Account> find(String username) {
         return Optional.ofNullable(accounts.get(key(username)));
     }
 
-    Optional<AuthStore.Account> findByUuid(UUID uuid) {
+    synchronized Optional<AuthStore.Account> findByUuid(UUID uuid) {
         return accounts.values().stream()
                 .filter(a -> a.uuid().equals(uuid))
                 .findFirst();
     }
 
-    boolean create(AuthStore.Account account) {
+    synchronized boolean create(AuthStore.Account account) {
         String key = key(account.username());
         if (accounts.containsKey(key)) {
             return false;
@@ -114,7 +114,7 @@ final class FallbackStore {
         return true;
     }
 
-    void recordSuccess(String username, String ip, long now, UUID uuid) {
+    synchronized void recordSuccess(String username, String ip, long now, UUID uuid) {
         String key = key(username);
         AuthStore.Account old = accounts.get(key);
         if (old != null) {
@@ -124,7 +124,7 @@ final class FallbackStore {
         }
     }
 
-    void recordFailure(String username, int maxFailures, long lockMillis, long now) {
+    synchronized void recordFailure(String username, int maxFailures, long lockMillis, long now) {
         String key = key(username);
         AuthStore.Account old = accounts.get(key);
         if (old == null) {
@@ -137,7 +137,7 @@ final class FallbackStore {
         save();
     }
 
-    boolean updatePassword(String username, String newHash) {
+    synchronized boolean updatePassword(String username, String newHash) {
         String key = key(username);
         AuthStore.Account old = accounts.get(key);
         if (old == null) {
@@ -149,7 +149,7 @@ final class FallbackStore {
         return true;
     }
 
-    boolean delete(String username) {
+    synchronized boolean delete(String username) {
         boolean removed = accounts.remove(key(username)) != null;
         if (removed) {
             save();
@@ -157,16 +157,16 @@ final class FallbackStore {
         return removed;
     }
 
-    int count() {
+    synchronized int count() {
         return accounts.size();
     }
 
-    void putSession(UUID uuid, String ip, long expiresAt) {
+    synchronized void putSession(UUID uuid, String ip, long expiresAt) {
         sessions.put(uuid.toString(), new Session(ip == null ? "" : ip, expiresAt));
         save();
     }
 
-    Optional<String> sessionIp(UUID uuid, long now) {
+    synchronized Optional<String> sessionIp(UUID uuid, long now) {
         Session s = sessions.get(uuid.toString());
         if (s == null) {
             return Optional.empty();
@@ -179,13 +179,13 @@ final class FallbackStore {
         return Optional.ofNullable(s.ip());
     }
 
-    void clearSession(UUID uuid) {
+    synchronized void clearSession(UUID uuid) {
         if (sessions.remove(uuid.toString()) != null) {
             save();
         }
     }
 
-    void purgeExpiredSessions(long now) {
+    synchronized void purgeExpiredSessions(long now) {
         if (sessions.values().removeIf(s -> s.expiresAt() < now)) {
             save();
         }

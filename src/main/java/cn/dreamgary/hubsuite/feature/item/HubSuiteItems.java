@@ -15,16 +15,9 @@ import net.minecraft.world.item.Rarity;
 /**
  * 本模组的自定义物品（v0.4.0 起）。
  *
- * <p><b>为什么必须依赖 Polymer：</b>{@code item} 注册表**不在** Minecraft
- * 的网络同步清单里（{@code RegistryDataLoader.SYNCHRONIZED_REGISTRIES}），
- * 原版客户端不认识我们自己注册的物品 id。Polymer 负责在发往客户端的包里
- * 把我们的物品换成**原版物品**（{@code getPolymerItem} → {@code trial_key}），
- * 再用 {@code item_model} 组件指到我们资源包里的模型 —— 于是客户端看到的是
- * "一个长得像地狱线的试炼钥匙"，而服务端持有的是**真正独立 id 的物品**，
- * 配方、统计、NBT 全都正常。
- *
- * <p>显示物品一律用 {@code minecraft:trial_key}：它在生存里少见，不会和
- * 正常玩法里的物品混淆；具体外观由资源包的 {@code hubsuite:item/<id>} 决定。
+ * <p>0.6 收尾起 <b>Polymer 已下线、客户端强制安装</b>：所有玩家都拿到真物品，
+ * 客户端用自己的模型渲染；没装客户端的玩家在注册表同步阶段就会被 Fabric 断开。
+ * （历史：0.4~0.5 曾用 Polymer 把物品映射成 {@code trial_key} 给原版客户端看。）
  */
 public final class HubSuiteItems {
 
@@ -42,18 +35,27 @@ public final class HubSuiteItems {
      */
     /** 遗留：0.5 的熔岩钓竿（不再产出，只为老存档里的旧竿还在）。 */
     public static Item LAVA_ROD;
-    /** 渔桶：钓饵的收纳袋（容量 16 / 64 / 1024）。 */
+    /** 渔桶：钓饵的收纳袋（容量 64 / 256 / 1024）。 */
     public static Item WOODEN_FISHING_BUCKET;
     public static Item IRON_FISHING_BUCKET;
     public static Item DIAMOND_FISHING_BUCKET;
+    /** 8 种自定义钓饵（水 3 档 / 岩浆 3 档 / 通用功能 2 种）。 */
+    public static Item BASIC_BAIT;
+    public static Item REFINED_BAIT;
+    public static Item ABYSSAL_BAIT;
+    public static Item EMBER_BAIT;
+    public static Item MAGMA_BAIT;
+    public static Item INFERNAL_BAIT;
+    public static Item TREASURE_BAIT;
+    public static Item TWIN_BAIT;
 
     private HubSuiteItems() {
     }
 
     /** 在 {@code onInitialize} 里调一次。 */
     public static void register() {
-        NETHER_STRING = register("nether_string", new HubSuiteSimpleItem(
-                HubSuiteItemDefs.properties(HubSuiteItemDefs.NETHER_STRING), Items.TRIAL_KEY));
+        NETHER_STRING = register("nether_string",
+                new HubSuiteSimpleItem(HubSuiteItemDefs.properties(HubSuiteItemDefs.NETHER_STRING)));
 
         // 遗留物品：注册着（老存档认得出），但样子退回原版钓竿、配方已删
         LAVA_ROD = register("lava_rod", new LegacyLavaRodItem(props("lava_rod")));
@@ -62,8 +64,17 @@ public final class HubSuiteItems {
         IRON_FISHING_BUCKET = bucket("iron_fishing_bucket", 256);
         DIAMOND_FISHING_BUCKET = bucket("diamond_fishing_bucket", 1024);
 
+        BASIC_BAIT = register("basic_bait", new HubSuiteSimpleItem(props("basic_bait")));
+        REFINED_BAIT = register("refined_bait", new HubSuiteSimpleItem(props("refined_bait")));
+        ABYSSAL_BAIT = register("abyssal_bait", new HubSuiteSimpleItem(props("abyssal_bait")));
+        EMBER_BAIT = register("ember_bait", new HubSuiteSimpleItem(props("ember_bait")));
+        MAGMA_BAIT = register("magma_bait", new HubSuiteSimpleItem(props("magma_bait")));
+        INFERNAL_BAIT = register("infernal_bait", new HubSuiteSimpleItem(props("infernal_bait")));
+        TREASURE_BAIT = register("treasure_bait", new HubSuiteSimpleItem(props("treasure_bait")));
+        TWIN_BAIT = register("twin_bait", new HubSuiteSimpleItem(props("twin_bait")));
+
         cn.dreamgary.hubsuite.HubSuite.logger().info(
-                "已注册 4 个自定义物品（地狱线 / 三种渔桶）+ 1 个遗留别名（熔岩钓竿，只能被换算掉）；钓饵改成 tag 驱动，见 #hubsuite:fishing_bait");
+                "已注册 12 个自定义物品（地狱线 / 三种渔桶 / 8 种钓饵）+ 1 个遗留别名（熔岩钓竿）");
     }
 
     private static Item bucket(String path, int capacity) {

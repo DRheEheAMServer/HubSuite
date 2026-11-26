@@ -15,8 +15,9 @@ import org.slf4j.LoggerFactory;
 /**
  * HubSuite 主入口。
  *
- * <p>本项目是<strong>纯服务端</strong>模组：所有功能都跑在 dedicated server 上，
- * 客户端使用原版即可进服（不安装也能玩）。
+ * <p>本项目的主体是<strong>纯服务端</strong>模组：所有玩法都跑在 dedicated server 上。
+ * 但自定义物品用的是<strong>真实物品 id</strong>（Polymer 已下线），玩家客户端必须安装配套的
+ * {@code hubsuite-client} 模组，否则注册表同步对不上、进不了服。
  *
  * <p>子系统一览（按开发阶段逐步接入）：
  * <ul>
@@ -60,12 +61,8 @@ public final class HubSuite implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        // 自定义物品必须先注册（Polymer 硬依赖，客户端侧由它映射成原版物品）
+        // 自定义物品必须先注册（0.6 收尾起 Polymer 已下线，不再需要资源包托管）
         cn.dreamgary.hubsuite.feature.item.HubSuiteItems.register();
-        // 模组自带的资源包素材（items/models/textures/lang）交给 Polymer 一起下发 ——
-        // 不做这一步，Polymer 生成的包只有 pack.mcmeta（实测 811 字节），客户端从服务器
-        // 拉下来一张贴图都没有（用户实测反馈过）。服主自己的资源包优先级更高，仍可覆盖。
-        registerResourcePackAssets();
         instance = this;
         LOGGER.info("{} 正在初始化……", MOD_NAME);
         logEnvironment();
@@ -117,6 +114,13 @@ public final class HubSuite implements ModInitializer {
 
         // 装配台（0.5.0 先做菜单与界面，0.6 方块化）
         cn.dreamgary.hubsuite.rod.AssemblyTable.register();
+
+        // 空岛「虚月律」魔法系统（方块 / 载体 / 法器 / 虚空侵蚀）
+        cn.dreamgary.hubsuite.magic.MagicRegistry.register(configManager.configDir());
+        cn.dreamgary.hubsuite.ocean.OceanRegistry.register(configManager.configDir());
+
+        // 创造模式标签页：物品不归入任何标签页，创造模式物品栏与 JEI 里都会找不到
+        cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.register();
 
         // 未登录锁定 + 命令闸门 + 权限
         permissions = new cn.dreamgary.hubsuite.feature.PermissionService();
@@ -241,6 +245,21 @@ public final class HubSuite implements ModInitializer {
         hubCommand.register();
         // 自检里"等世界生成"的项靠每 tick 推进 —— 不能在主线程上等，会卡到看门狗强杀
         HubCommand.registerSelfTestPump();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK
+                .register(cn.dreamgary.hubsuite.ui.ChestMenuScreen::tick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            if (questManager != null) {
+                questManager.saveIfDirty();
+            }
+            cn.dreamgary.hubsuite.magic.VoidErosionManager.saveIfDirty();
+            cn.dreamgary.hubsuite.trinket.TrinketStorage.saveAll(server);
+            if (authService != null) {
+                authService.shutdown();
+            }
+            if (npcManager != null) {
+                npcManager.despawnAll();
+            }
+        });
         cn.dreamgary.hubsuite.command.MenuCommand.register();
         new cn.dreamgary.hubsuite.command.AuthCommand(worldsManager, authService, authManager).register();
 
@@ -257,25 +276,6 @@ public final class HubSuite implements ModInitializer {
         LOGGER.info("  运行环境      : {}", loader.getEnvironmentType());
         LOGGER.info("  软依赖探测    : huskhomes={}, placeholder-api={}, luckperms={}, fabric-permissions-api-v0={}, jei={}",
                 isLoaded("huskhomes"), isLoaded("placeholder-api"), isLoaded("luckperms"), isLoaded("fabric-permissions-api-v0"), isLoaded("jei"));
-    }
-
-    /**
-     * 把模组 jar 里的 {@code assets/hubsuite/**} 交给 Polymer 的自动托管资源包。
-     *
-     * <p>Polymer 的 resource-pack 模块不一定在（有人只装 {@code polymer-core}），
-     * 所以先探测再调用，并且整体 try/catch：缺了只是"没有自定义外观"，不影响玩法。
-     */
-    private void registerResourcePackAssets() {
-        try {
-            if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("polymer-resource-pack")) {
-                LOGGER.warn("未检测到 polymer-resource-pack：自定义物品的外观需要服主自行提供资源包");
-                return;
-            }
-            boolean added = eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils.addModAssets("hubsuite");
-            LOGGER.info("已把模组自带的资源包素材交给 Polymer 下发（added={}）", added);
-        } catch (Throwable t) {
-            LOGGER.warn("资源包素材注册失败（自定义外观会缺贴图）：{}", t.toString());
-        }
     }
 
     private static boolean isLoaded(String modId) {

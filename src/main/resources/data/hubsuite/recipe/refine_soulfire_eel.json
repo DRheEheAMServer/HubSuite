@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:soulfire_eel"
+  ],
+  "result": {
+    "id": "hubsuite:infernal_bait",
+    "count": 2
+  }
+}

@@ -90,13 +90,39 @@ public final class QuestManager {
             try (Reader reader = Files.newBufferedReader(storeFile, StandardCharsets.UTF_8)) {
                 Map<String, Progress> loaded = GSON.fromJson(reader, MAP_TYPE.getType());
                 if (loaded != null) {
+                    loaded.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null);
                     players.putAll(loaded);
                 }
             }
             // 反序列化可能带来 null 字段，统一补齐（否则后面到处 NPE）
             players.values().forEach(this::repair);
         } catch (Throwable t) {
-            HubSuite.logger().error("读取任务进度失败（将从头开始）：{}", storeFile, t);
+            HubSuite.logger().error("读取任务进度失败（已备份损坏文件并从头开始）：{}", storeFile, t);
+            try {
+                if (Files.exists(storeFile)) {
+                    Path backup = storeFile.resolveSibling(
+                            storeFile.getFileName() + ".corrupt-" + System.currentTimeMillis());
+                    Files.move(storeFile, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private volatile boolean dirty;
+    private volatile long lastSavedAt;
+
+    private void markDirty() {
+        dirty = true;
+        long now = System.currentTimeMillis();
+        if (now - lastSavedAt >= 10_000L) {
+            save();
+        }
+    }
+
+    public void saveIfDirty() {
+        if (dirty) {
+            save();
         }
     }
 
@@ -131,6 +157,8 @@ public final class QuestManager {
             } catch (java.io.IOException atomicUnsupported) {
                 Files.move(tmp, storeFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+            dirty = false;
+            lastSavedAt = System.currentTimeMillis();
         } catch (Throwable t) {
             HubSuite.logger().error("保存任务进度失败：{}", storeFile, t);
         }
@@ -184,15 +212,14 @@ public final class QuestManager {
         }
         try {
             Progress progress = progressOf(player);
-            String key = goalType.name().toLowerCase(java.util.Locale.ROOT) + ":" + arg;
-
             boolean changed = false;
             for (Quest quest : config.quests) {
                 if (quest.goalType() != goalType || !arg.equalsIgnoreCase(quest.goalArg())) {
                     continue;
                 }
+                String key = quest.id;
                 if (quest.kind == Quest.Kind.DAILY) {
-                    int before = progress.dailyCounters.getOrDefault(key, 0);
+                    int before = counterValue(progress.dailyCounters, quest);
                     int after = Math.min(quest.amount, before + delta);
                     if (after != before) {
                         progress.dailyCounters.put(key, after);
@@ -202,7 +229,7 @@ public final class QuestManager {
                     if (progress.done.contains(quest.id)) {
                         continue;
                     }
-                    int before = progress.counters.getOrDefault(key, 0);
+                    int before = counterValue(progress.counters, quest);
                     int after = Math.min(quest.amount, before + delta);
                     if (after != before) {
                         progress.counters.put(key, after);
@@ -211,7 +238,7 @@ public final class QuestManager {
                 }
             }
             if (changed) {
-                save();
+                markDirty();
             }
         } catch (Throwable t) {
             HubSuite.logger().error("推进任务进度失败（{}）", goalType, t);
@@ -240,7 +267,7 @@ public final class QuestManager {
                     continue;
                 }
                 int have = player.getInventory().countItem(item);
-                String key = quest.counterKey();
+                String key = quest.id;
 
                 if (quest.kind == Quest.Kind.DAILY) {
                     int after = Math.min(quest.amount, have);
@@ -258,11 +285,19 @@ public final class QuestManager {
                 }
             }
             if (changed) {
-                save();
+                markDirty();
             }
         } catch (Throwable t) {
             HubSuite.logger().error("同步持有量任务失败", t);
         }
+    }
+
+    private static int counterValue(Map<String, Integer> map, Quest quest) {
+        Integer byId = map.get(quest.id);
+        if (byId != null) {
+            return byId;
+        }
+        return map.getOrDefault(quest.counterKey(), 0);
     }
 
     // ------------------------------------------------------------------
@@ -271,11 +306,17 @@ public final class QuestManager {
 
     /** 任务当前进度（0..amount）。 */
     public int progressOf(ServerPlayer player, Quest quest) {
+        if (quest.kind == Quest.Kind.DELIVER) {
+            Item item = itemOf(quest.goalArg());
+            if (item == null || item == Items.AIR) {
+                return 0;
+            }
+            return Math.min(quest.amount, player.getInventory().countItem(item));
+        }
         Progress progress = progressOf(player);
-        String key = quest.counterKey();
         return switch (quest.kind) {
-            case DAILY -> Math.min(quest.amount, progress.dailyCounters.getOrDefault(key, 0));
-            default -> Math.min(quest.amount, progress.counters.getOrDefault(key, 0));
+            case DAILY -> Math.min(quest.amount, counterValue(progress.dailyCounters, quest));
+            default -> Math.min(quest.amount, counterValue(progress.counters, quest));
         };
     }
 
@@ -284,10 +325,10 @@ public final class QuestManager {
         Progress progress = progressOf(player);
         return switch (quest.kind) {
             case DAILY -> progress.dailyDone.contains(quest.id)
-                    || progress.dailyCounters.getOrDefault(quest.counterKey(), 0) >= quest.amount;
+                    || counterValue(progress.dailyCounters, quest) >= quest.amount;
             case DELIVER -> canDeliver(player, quest);
             case MILESTONE -> progress.done.contains(quest.id)
-                    || progress.counters.getOrDefault(quest.counterKey(), 0) >= quest.amount;
+                    || counterValue(progress.counters, quest) >= quest.amount;
         };
     }
 
@@ -346,8 +387,8 @@ public final class QuestManager {
                 HubSuite.logger().warn("任务 '{}' 的奖励 '{}' 解析失败，已跳过", quest.id, reward);
                 continue;
             }
+            given.add(stack.copy());
             give(player, stack);
-            given.add(stack);
         }
 
         if (quest.kind == Quest.Kind.MILESTONE) {
@@ -356,6 +397,7 @@ public final class QuestManager {
             progress.dailyDone.add(quest.id);
         } else {
             // 可重复：把计数清零，方便再交
+            progress.counters.remove(quest.id);
             progress.counters.remove(quest.counterKey());
         }
         save();

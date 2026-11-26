@@ -45,7 +45,7 @@ public final class RodEnchanting {
         if (player == null) {
             return false;
         }
-        RodData data = RodData.of(player.getMainHandItem());
+        RodData data = RodData.of(RodFishing.activeRod(player));
         return data != null && data.boostsEnchant();
     }
 
@@ -87,7 +87,23 @@ public final class RodEnchanting {
         if (roll >= TREASURE_CHANCE) {
             return false;
         }
-        List<Holder<Enchantment>> pool = treasurePool(level.registryAccess());
+        List<Holder<Enchantment>> pool = new ArrayList<>();
+        var existing = stack.getEnchantments().keySet();
+        for (Holder<Enchantment> holder : treasurePool(level.registryAccess())) {
+            if (!holder.value().canEnchant(stack)) {
+                continue;
+            }
+            boolean compatible = true;
+            for (Holder<Enchantment> present : existing) {
+                if (present.equals(holder) || !Enchantment.areCompatible(present, holder)) {
+                    compatible = false;
+                    break;
+                }
+            }
+            if (compatible) {
+                pool.add(holder);
+            }
+        }
         if (pool.isEmpty()) {
             return false;
         }

@@ -25,6 +25,9 @@ public final class ClientHandshake {
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Hello.TYPE, HandshakePayloads.Hello.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(HandshakePayloads.Welcome.TYPE, HandshakePayloads.Welcome.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayloads.HelloAck.TYPE, HandshakePayloads.HelloAck.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(
+                cn.dreamgary.hubsuite.net.UiActionPayload.UiAction.TYPE,
+                cn.dreamgary.hubsuite.net.UiActionPayload.UiAction.CODEC);
 
         ClientPlayNetworking.registerGlobalReceiver(HandshakePayloads.Hello.TYPE, (payload, context) -> {
             if (payload.protocol() != HandshakePayloads.PROTOCOL) {
@@ -36,7 +39,7 @@ public final class ClientHandshake {
                     HubSuiteClient.version(),
                     HubSuiteClient.fingerprint(),
                     CAPS);
-            context.client().execute(() -> ClientPlayNetworking.send(ack));
+            context.responseSender().sendPacket(ack);
         });
 
         ClientPlayNetworking.registerGlobalReceiver(HandshakePayloads.Welcome.TYPE, (payload, context) ->

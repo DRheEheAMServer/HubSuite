@@ -40,13 +40,13 @@ public final class FishingGameplay {
         return inFluid(hook, FluidTags.LAVA);
     }
 
-    /** 副手钓饵当前给这枚钩子的加速比例（0 = 没生效）。 */
+    /** 副手钓饵与海岛潮汐事件共同给这枚钩子的加速比例（0 = 没生效）。 */
     public static double baitSpeedup(FishingHook hook) {
         Player owner = hook.getPlayerOwner();
-        if (owner == null) {
-            return 0;
-        }
-        return FishingBait.speedup(owner, inFluid(hook, FluidTags.LAVA));
+        double bait = owner == null ? 0.0 : FishingBait.speedup(owner, inFluid(hook, FluidTags.LAVA));
+        double eventBonus = cn.dreamgary.hubsuite.ocean.OceanEventManager
+                .biteSpeedBonus(hook.level().dimension());
+        return Math.min(0.85, bait + eventBonus);
     }
 
     /** 钓上来一条：扣掉一个生效的副手钓饵。 */

@@ -269,6 +269,9 @@ public final class AuxDataRouter {
             }
             // 下一 tick 执行：此时 teleport 已生效，player.level() 是目标维度
             server.execute(() -> {
+                if (player.hasDisconnected()) {
+                    return;
+                }
                 try {
                     ((PlayerListAuxAccess) server.getPlayerList()).hubsuite$rebindAux(player);
                 } catch (Throwable t) {

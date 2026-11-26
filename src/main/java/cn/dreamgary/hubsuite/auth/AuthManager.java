@@ -316,9 +316,11 @@ public final class AuthManager {
     // ------------------------------------------------------------------
 
     public boolean isAuthenticated(ServerPlayer player) {
+        if (!config.enabled || isFake(player)) {
+            return true;
+        }
         AuthState state = states.get(player.getUUID());
-        // 没记录 = 登录系统关闭，视为已认证
-        return state == null || state.authenticated;
+        return state != null && state.authenticated;
     }
 
     public Optional<AuthState> state(ServerPlayer player) {

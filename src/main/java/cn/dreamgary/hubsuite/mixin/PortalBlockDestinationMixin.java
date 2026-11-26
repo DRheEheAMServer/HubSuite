@@ -70,21 +70,57 @@ public abstract class PortalBlockDestinationMixin {
                 return original;
             }
             ResourceKey<Level> targetKey = vanillaTarget.dimension();
-            // 只在下界/末地这两个写死的目标上做手脚，其它一律不动
-            if (!Level.NETHER.equals(targetKey) && !Level.END.equals(targetKey)) {
+            // 只对下界/末地/主世界返回做重定向，其它一律不动
+            if (!Level.NETHER.equals(targetKey)
+                    && !Level.END.equals(targetKey)
+                    && !Level.OVERWORLD.equals(targetKey)) {
                 return original;
             }
-            boolean targetIsNether = Level.NETHER.equals(targetKey);
             ResourceKey<Level> redirected = PortalLinks.redirect(fromLevel.dimension(), targetKey);
-            if (redirected == null || redirected.equals(targetKey)) {
+            if (redirected == null) {
+                // 受管维度尝试跳往未启用的原版下界/末地 → 取消传送，防止跨服逃逸
+                return null;
+            }
+            if (redirected.equals(targetKey)) {
                 return original;   // 没登记 / 不需要改
             }
             ServerLevel destination = PortalLinks.levelOf(fromLevel.getServer(), redirected);
             if (destination == null) {
-                // 目标维度没造出来（配置关掉或构造失败）→ 保留原版行为，
-                // 总比把玩家送进一个不存在的维度好。
                 return original;
             }
+
+            // 末地传送门（进末地黑曜石平台 / 从末地返回子服主维度）：绝不调用 PortalForcer 建下界门
+            if ((Object) this instanceof EndPortalBlock) {
+                if (Level.END.equals(targetKey)) {
+                    BlockPos platform = ServerLevel.END_SPAWN_POINT;
+                    net.minecraft.world.level.levelgen.feature.EndPlatformFeature
+                            .createEndPlatform(destination, platform.below(), true);
+                    Vec3 pos = Vec3.atBottomCenterOf(platform);
+                    return new TeleportTransition(
+                            destination,
+                            pos,
+                            Vec3.ZERO,
+                            net.minecraft.core.Direction.WEST.toYRot(),
+                            0.0F,
+                            Relative.union(Relative.DELTA, Relative.ROTATION),
+                            original.postTeleportTransition());
+                }
+                // 从子服末地跳入返回泉水 → 回到子服主维度的玩家重生点（或世界出生点）
+                if (entity instanceof net.minecraft.server.level.ServerPlayer sp) {
+                    return sp.findRespawnPositionAndUseSpawnBlock(false, original.postTeleportTransition());
+                }
+                BlockPos spawnPos = destination.getRespawnData().pos();
+                return new TeleportTransition(
+                        destination,
+                        Vec3.atBottomCenterOf(spawnPos),
+                        Vec3.ZERO,
+                        original.yRot(),
+                        original.xRot(),
+                        Relative.union(Relative.DELTA, Relative.ROTATION),
+                        original.postTeleportTransition());
+            }
+
+            boolean targetIsNether = Level.NETHER.equals(targetKey);
 
             /*
              * 坐标换算：**必须自己按"当前维度 ↔ 实际目标维度"重算**，
@@ -155,6 +191,7 @@ public abstract class PortalBlockDestinationMixin {
 
         BlockUtil.FoundRectangle rect;
         Optional<BlockPos> existing = forcer.findClosestPortalPosition(scaledPos, isNether, border);
+        boolean isNewPortal = existing.isEmpty();
         if (existing.isPresent()) {
             BlockPos pos = existing.get();
             BlockState state = level.getBlockState(pos);
@@ -179,12 +216,10 @@ public abstract class PortalBlockDestinationMixin {
         /*
          * 特殊下界（空岛/海岛那两座）：在门下面补一座**全下界岩**的小岛。
          *
-         * 用户要求："在地狱门的生成位置下面生成一个小岛屿，全部都是地狱岩"。
-         * 空岛式的下界是纯虚空，没有这座小岛玩家一出门就往下掉；
-         * 岩浆海下界也一样，出门就是岩浆。
+         * 仅在新建传送门或门下缺乏稳固落脚点时补铺，且绝不覆盖黑曜石门框、传送门方块或玩家方块。
          */
         if (isNether && PortalLinks.isIslandNether(level.dimension())) {
-            this.hubsuite$buildNetherIsland(level, rect.minCorner);
+            this.hubsuite$buildNetherIsland(level, rect.minCorner, isNewPortal);
         }
 
         BlockPos min = rect.minCorner;
@@ -218,10 +253,27 @@ public abstract class PortalBlockDestinationMixin {
      * <p>遇到没加载的区块**直接跳过那一列**：{@code setBlock} 会同步把区块拉起来，
      * 在主线程上就是看门狗风险（本项目踩过）。
      */
-    private void hubsuite$buildNetherIsland(ServerLevel level, BlockPos portalMin) {
+    private void hubsuite$buildNetherIsland(ServerLevel level, BlockPos portalMin, boolean isNewPortal) {
         try {
             int radius = 3;
             int baseY = portalMin.getY() - 1;
+            if (!isNewPortal) {
+                // 已有传送门且周围已有稳固落脚点时直接跳过，避免覆盖玩家建筑
+                boolean needsSupport = false;
+                for (int dx = -1; dx <= 1 && !needsSupport; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        BlockPos check = new BlockPos(portalMin.getX() + dx, baseY, portalMin.getZ() + dz);
+                        BlockState st = level.getBlockState(check);
+                        if (st.isAir() || !st.getFluidState().isEmpty()) {
+                            needsSupport = true;
+                            break;
+                        }
+                    }
+                }
+                if (!needsSupport) {
+                    return;
+                }
+            }
             int placed = 0;
             int skipped = 0;
             for (int dx = -radius; dx <= radius; dx++) {
@@ -236,9 +288,29 @@ public abstract class PortalBlockDestinationMixin {
                         continue;
                     }
                     for (int dy = 0; dy >= -2; dy--) {
-                        level.setBlock(new BlockPos(x, baseY + dy, z),
-                                net.minecraft.world.level.block.Blocks.NETHERRACK.defaultBlockState(), 3);
-                        placed++;
+                        BlockPos target = new BlockPos(x, baseY + dy, z);
+                        BlockState existing = level.getBlockState(target);
+                        if (existing.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
+                                || existing.is(net.minecraft.world.level.block.Blocks.NETHER_PORTAL)) {
+                            continue;
+                        }
+                        if (existing.isAir() || !existing.getFluidState().isEmpty()
+                                || existing.is(net.minecraft.world.level.block.Blocks.FIRE)) {
+                            level.setBlock(target,
+                                    net.minecraft.world.level.block.Blocks.NETHERRACK.defaultBlockState(), 3);
+                            placed++;
+                        }
+                    }
+                    if (isNewPortal && Math.abs(dx) <= 2 && Math.abs(dz) <= 2) {
+                        for (int dy = 0; dy <= 2; dy++) {
+                            BlockPos head = new BlockPos(x, portalMin.getY() + dy, z);
+                            BlockState headState = level.getBlockState(head);
+                            if (!headState.isAir()
+                                    && !headState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
+                                    && !headState.is(net.minecraft.world.level.block.Blocks.NETHER_PORTAL)) {
+                                level.setBlock(head, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+                            }
+                        }
                     }
                 }
             }

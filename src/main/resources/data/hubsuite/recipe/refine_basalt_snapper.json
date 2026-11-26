@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:basalt_snapper"
+  ],
+  "result": {
+    "id": "minecraft:crying_obsidian",
+    "count": 1
+  }
+}

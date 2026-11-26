@@ -27,7 +27,8 @@ public final class AuthStore {
 
     private final Path databaseFile;
     private final FallbackStore fallback;
-    private boolean useFallback;
+    private final Object dbLock = new Object();
+    private volatile boolean useFallback;
     private Connection connection;
 
     public AuthStore(Path dataDir) {
@@ -58,13 +59,15 @@ public final class AuthStore {
     }
 
     public void close() {
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (SQLException ignored) {
-                // 关闭失败无所谓
+        synchronized (dbLock) {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException ignored) {
+                    // 关闭失败无所谓
+                }
+                connection = null;
             }
-            connection = null;
         }
         if (useFallback) {
             fallback.save();
@@ -81,6 +84,8 @@ public final class AuthStore {
 
     private void migrate() throws SQLException {
         try (Statement st = connection.createStatement()) {
+            st.execute("PRAGMA journal_mode=WAL");
+            st.execute("PRAGMA busy_timeout=5000");
             st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS accounts (
                         username      TEXT PRIMARY KEY COLLATE NOCASE,
@@ -129,15 +134,20 @@ public final class AuthStore {
         }
         String sql = "SELECT username, uuid, password_hash, created_at, last_login_at, last_ip, failures, locked_until "
                 + "FROM accounts WHERE username = ? COLLATE NOCASE";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(readAccount(rs));
-                }
+        synchronized (dbLock) {
+            if (connection == null) {
+                return Optional.empty();
             }
-        } catch (SQLException e) {
-            HubSuite.logger().error("查询账号 '{}' 失败", username, e);
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, username);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(readAccount(rs));
+                    }
+                }
+            } catch (SQLException e) {
+                HubSuite.logger().error("查询账号 '{}' 失败", username, e);
+            }
         }
         return Optional.empty();
     }
@@ -151,15 +161,20 @@ public final class AuthStore {
         }
         String sql = "SELECT username, uuid, password_hash, created_at, last_login_at, last_ip, failures, locked_until "
                 + "FROM accounts WHERE uuid = ? LIMIT 1";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(readAccount(rs));
-                }
+        synchronized (dbLock) {
+            if (connection == null) {
+                return Optional.empty();
             }
-        } catch (SQLException e) {
-            HubSuite.logger().error("按 UUID 查询账号失败", e);
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(readAccount(rs));
+                    }
+                }
+            } catch (SQLException e) {
+                HubSuite.logger().error("按 UUID 查询账号失败", e);
+            }
         }
         return Optional.empty();
     }
@@ -175,20 +190,25 @@ public final class AuthStore {
         }
         String sql = "INSERT INTO accounts (username, uuid, password_hash, created_at, last_login_at, last_ip, failures, locked_until) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, account.username());
-            ps.setString(2, account.uuid().toString());
-            ps.setString(3, account.passwordHash());
-            ps.setLong(4, account.createdAt());
-            ps.setLong(5, account.lastLoginAt());
-            ps.setString(6, account.lastIp());
-            ps.setInt(7, account.failures());
-            ps.setLong(8, account.lockedUntil());
-            ps.executeUpdate();
-            return true;
-        } catch (SQLException e) {
-            HubSuite.logger().warn("创建账号 '{}' 失败（可能已存在）：{}", account.username(), e.getMessage());
-            return false;
+        synchronized (dbLock) {
+            if (connection == null) {
+                return false;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, account.username());
+                ps.setString(2, account.uuid().toString());
+                ps.setString(3, account.passwordHash());
+                ps.setLong(4, account.createdAt());
+                ps.setLong(5, account.lastLoginAt());
+                ps.setString(6, account.lastIp());
+                ps.setInt(7, account.failures());
+                ps.setLong(8, account.lockedUntil());
+                ps.executeUpdate();
+                return true;
+            } catch (SQLException e) {
+                HubSuite.logger().warn("创建账号 '{}' 失败（可能已存在）：{}", account.username(), e.getMessage());
+                return false;
+            }
         }
     }
 
@@ -200,14 +220,19 @@ public final class AuthStore {
         }
         String sql = "UPDATE accounts SET last_login_at = ?, last_ip = ?, failures = 0, locked_until = 0, uuid = ? "
                 + "WHERE username = ? COLLATE NOCASE";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setLong(1, now);
-            ps.setString(2, ip == null ? "" : ip);
-            ps.setString(3, uuid.toString());
-            ps.setString(4, username);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            HubSuite.logger().error("更新账号 '{}' 登录信息失败", username, e);
+        synchronized (dbLock) {
+            if (connection == null) {
+                return;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setLong(1, now);
+                ps.setString(2, ip == null ? "" : ip);
+                ps.setString(3, uuid.toString());
+                ps.setString(4, username);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                HubSuite.logger().error("更新账号 '{}' 登录信息失败", username, e);
+            }
         }
     }
 
@@ -218,29 +243,34 @@ public final class AuthStore {
             return;
         }
         String select = "SELECT failures FROM accounts WHERE username = ? COLLATE NOCASE";
-        try (PreparedStatement ps = connection.prepareStatement(select)) {
-            ps.setString(1, username);
-            int failures;
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    return;
+        synchronized (dbLock) {
+            if (connection == null) {
+                return;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(select)) {
+                ps.setString(1, username);
+                int failures;
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return;
+                    }
+                    failures = rs.getInt(1) + 1;
                 }
-                failures = rs.getInt(1) + 1;
+                long lockedUntil = failures >= maxFailures ? now + lockMillis : 0L;
+                try (PreparedStatement up = connection.prepareStatement(
+                        "UPDATE accounts SET failures = ?, locked_until = ? WHERE username = ? COLLATE NOCASE")) {
+                    up.setInt(1, failures);
+                    up.setLong(2, lockedUntil);
+                    up.setString(3, username);
+                    up.executeUpdate();
+                }
+                if (lockedUntil > 0) {
+                    HubSuite.logger().warn("账号 '{}' 连续失败 {} 次，已锁定至 {}。",
+                            username, failures, java.time.Instant.ofEpochMilli(lockedUntil));
+                }
+            } catch (SQLException e) {
+                HubSuite.logger().error("记录账号 '{}' 失败次数出错", username, e);
             }
-            long lockedUntil = failures >= maxFailures ? now + lockMillis : 0L;
-            try (PreparedStatement up = connection.prepareStatement(
-                    "UPDATE accounts SET failures = ?, locked_until = ? WHERE username = ? COLLATE NOCASE")) {
-                up.setInt(1, failures);
-                up.setLong(2, lockedUntil);
-                up.setString(3, username);
-                up.executeUpdate();
-            }
-            if (lockedUntil > 0) {
-                HubSuite.logger().warn("账号 '{}' 连续失败 {} 次，已锁定至 {}。",
-                        username, failures, java.time.Instant.ofEpochMilli(lockedUntil));
-            }
-        } catch (SQLException e) {
-            HubSuite.logger().error("记录账号 '{}' 失败次数出错", username, e);
         }
     }
 
@@ -249,14 +279,19 @@ public final class AuthStore {
         if (useFallback) {
             return fallback.updatePassword(username, newHash);
         }
-        try (PreparedStatement ps = connection.prepareStatement(
-                "UPDATE accounts SET password_hash = ?, failures = 0, locked_until = 0 WHERE username = ? COLLATE NOCASE")) {
-            ps.setString(1, newHash);
-            ps.setString(2, username);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            HubSuite.logger().error("重置账号 '{}' 密码失败", username, e);
-            return false;
+        synchronized (dbLock) {
+            if (connection == null) {
+                return false;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "UPDATE accounts SET password_hash = ?, failures = 0, locked_until = 0 WHERE username = ? COLLATE NOCASE")) {
+                ps.setString(1, newHash);
+                ps.setString(2, username);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                HubSuite.logger().error("重置账号 '{}' 密码失败", username, e);
+                return false;
+            }
         }
     }
 
@@ -264,13 +299,18 @@ public final class AuthStore {
         if (useFallback) {
             return fallback.delete(username);
         }
-        try (PreparedStatement ps = connection.prepareStatement(
-                "DELETE FROM accounts WHERE username = ? COLLATE NOCASE")) {
-            ps.setString(1, username);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            HubSuite.logger().error("删除账号 '{}' 失败", username, e);
-            return false;
+        synchronized (dbLock) {
+            if (connection == null) {
+                return false;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "DELETE FROM accounts WHERE username = ? COLLATE NOCASE")) {
+                ps.setString(1, username);
+                return ps.executeUpdate() > 0;
+            } catch (SQLException e) {
+                HubSuite.logger().error("删除账号 '{}' 失败", username, e);
+                return false;
+            }
         }
     }
 
@@ -278,11 +318,16 @@ public final class AuthStore {
         if (useFallback) {
             return fallback.count();
         }
-        try (Statement st = connection.createStatement();
-             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM accounts")) {
-            return rs.next() ? rs.getInt(1) : 0;
-        } catch (SQLException e) {
-            return 0;
+        synchronized (dbLock) {
+            if (connection == null) {
+                return 0;
+            }
+            try (Statement st = connection.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM accounts")) {
+                return rs.next() ? rs.getInt(1) : 0;
+            } catch (SQLException e) {
+                return 0;
+            }
         }
     }
 
@@ -307,15 +352,20 @@ public final class AuthStore {
             fallback.putSession(uuid, ip, expiresAt);
             return;
         }
-        try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO sessions (uuid, ip, expires_at) VALUES (?, ?, ?) "
-                        + "ON CONFLICT(uuid) DO UPDATE SET ip = excluded.ip, expires_at = excluded.expires_at")) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, ip == null ? "" : ip);
-            ps.setLong(3, expiresAt);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            HubSuite.logger().error("写入会话失败", e);
+        synchronized (dbLock) {
+            if (connection == null) {
+                return;
+            }
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "INSERT INTO sessions (uuid, ip, expires_at) VALUES (?, ?, ?) "
+                            + "ON CONFLICT(uuid) DO UPDATE SET ip = excluded.ip, expires_at = excluded.expires_at")) {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, ip == null ? "" : ip);
+                ps.setLong(3, expiresAt);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                HubSuite.logger().error("写入会话失败", e);
+            }
         }
     }
 
@@ -324,21 +374,26 @@ public final class AuthStore {
         if (useFallback) {
             return fallback.sessionIp(uuid, now);
         }
-        try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT ip, expires_at FROM sessions WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    return Optional.empty();
-                }
-                if (rs.getLong("expires_at") < now) {
-                    clearSession(uuid);
-                    return Optional.empty();
-                }
-                return Optional.ofNullable(rs.getString("ip"));
+        synchronized (dbLock) {
+            if (connection == null) {
+                return Optional.empty();
             }
-        } catch (SQLException e) {
-            return Optional.empty();
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "SELECT ip, expires_at FROM sessions WHERE uuid = ?")) {
+                ps.setString(1, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return Optional.empty();
+                    }
+                    if (rs.getLong("expires_at") < now) {
+                        clearSession(uuid);
+                        return Optional.empty();
+                    }
+                    return Optional.ofNullable(rs.getString("ip"));
+                }
+            } catch (SQLException e) {
+                return Optional.empty();
+            }
         }
     }
 
@@ -347,11 +402,16 @@ public final class AuthStore {
             fallback.clearSession(uuid);
             return;
         }
-        try (PreparedStatement ps = connection.prepareStatement("DELETE FROM sessions WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            HubSuite.logger().error("清理会话失败", e);
+        synchronized (dbLock) {
+            if (connection == null) {
+                return;
+            }
+            try (PreparedStatement ps = connection.prepareStatement("DELETE FROM sessions WHERE uuid = ?")) {
+                ps.setString(1, uuid.toString());
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                HubSuite.logger().error("清理会话失败", e);
+            }
         }
     }
 
@@ -360,11 +420,16 @@ public final class AuthStore {
             fallback.purgeExpiredSessions(now);
             return;
         }
-        try (PreparedStatement ps = connection.prepareStatement("DELETE FROM sessions WHERE expires_at < ?")) {
-            ps.setLong(1, now);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            HubSuite.logger().error("清理过期会话失败", e);
+        synchronized (dbLock) {
+            if (connection == null) {
+                return;
+            }
+            try (PreparedStatement ps = connection.prepareStatement("DELETE FROM sessions WHERE expires_at < ?")) {
+                ps.setLong(1, now);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                HubSuite.logger().error("清理过期会话失败", e);
+            }
         }
     }
 }

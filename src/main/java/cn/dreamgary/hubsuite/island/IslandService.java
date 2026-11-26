@@ -281,10 +281,6 @@ public final class IslandService {
             if (!isSkyblock(level) || !(player instanceof ServerPlayer serverPlayer)) {
                 return InteractionResult.PASS;
             }
-            // 只拦"放置/使用"类交互；空手右键仍然放行（避免连门都开不了）
-            if (player.getItemInHand(hand).isEmpty()) {
-                return InteractionResult.PASS;
-            }
 
             /*
              * 对**容器类方块**（箱子/工作台/熔炉…）每次右键都记一条日志。

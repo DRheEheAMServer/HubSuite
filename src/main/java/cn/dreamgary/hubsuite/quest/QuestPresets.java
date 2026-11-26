@@ -133,19 +133,86 @@ public final class QuestPresets {
                 "minecraft:diamond_block", "have:minecraft:diamond", 16,
                 "minecraft:enchanted_golden_apple*1", "minecraft:diamond_block*2"));
 
-        // ── 里程碑：海岛路线 ──
-        quests.add(milestone("ocean_fish_16", "§b渔猎", "钓到 16 条鱼",
-                "minecraft:fishing_rod", "have:minecraft:cod", 16,
-                "minecraft:cooked_cod*8", "minecraft:iron_ingot*4"));
-
-        quests.add(milestone("ocean_sail", "§b出海", "做一条船",
+        // ── 里程碑：海岛路线（8 步递进引导） ──
+        quests.add(milestone("ocean_sail", "§b扬帆出海", "做一条橡木船，准备探索海洋各温度带",
                 "minecraft:oak_boat", "have:minecraft:oak_boat", 1,
                 "minecraft:map*1", "minecraft:compass*1"));
+
+        quests.add(milestoneReq("ocean_bucket", "§b渔猎行囊", "制作一个木渔桶，收纳自定义鱼饵并自动补饵",
+                "hubsuite:wooden_fishing_bucket", "have:hubsuite:wooden_fishing_bucket", 1,
+                "ocean_sail",
+                "hubsuite:basic_bait*8"));
+
+        quests.add(milestoneReq("ocean_assembly_table", "§b钓竿工坊", "制作钓竿装配台，组装自己的四层定制钓竿",
+                "hubsuite:assembly_table", "have:hubsuite:assembly_table", 1,
+                "ocean_bucket",
+                "minecraft:iron_ingot*4", "minecraft:string*4"));
+
+        quests.add(milestoneReq("ocean_first_bait", "§b秘饵增效", "准备 8 个粗制鱼饵（放在副手或渔桶里加速咬钩）",
+                "hubsuite:basic_bait", "have:hubsuite:basic_bait", 8,
+                "ocean_assembly_table",
+                "hubsuite:refined_bait*4"));
+
+        quests.add(milestoneReq("ocean_fish_16", "§b初试海钓", "在海岛钓到 16 条鳕鱼",
+                "minecraft:fishing_rod", "have:minecraft:cod", 16,
+                "ocean_first_bait",
+                "hubsuite:ocean_sashimi*2", "minecraft:iron_ingot*4"));
+
+        quests.add(milestoneReq("ocean_fish_trap", "§b海岛蟹笼", "制作海岛蟹笼并放在水中，全自动收集基础海产与沙砾",
+                "hubsuite:fish_trap", "have:hubsuite:fish_trap", 1,
+                "ocean_fish_16",
+                "hubsuite:treasure_bait*2"));
+
+        quests.add(milestoneReq("ocean_lava_bait", "§c熔岩垂钓", "制作余烬鱼饵，配合耐岩浆钓钩与地狱线前往下界岩浆海垂钓",
+                "hubsuite:ember_bait", "have:hubsuite:ember_bait", 4,
+                "ocean_fish_trap",
+                "hubsuite:magma_seared_steak*2", "hubsuite:nether_string*2"));
+
+        quests.add(milestoneReq("ocean_specialty_fish", "§d奇鱼图鉴", "钓获第一条海岛奇鱼（输入 /fishdex 查看图鉴与里程碑奖励）",
+                "hubsuite:coral_butterflyfish", "have:hubsuite:coral_butterflyfish", 1,
+                "ocean_lava_bait",
+                "hubsuite:golden_fish_soup*2", "minecraft:emerald*4"));
 
         // ── 里程碑：探索 ──
         quests.add(milestone("reach_y120", "§d登高", "到达 Y=120",
                 "minecraft:ladder", "reach_y:120", 1,
                 "minecraft:golden_apple*2"));
+
+        // ── 里程碑：经典空岛·虚月律 ──
+        quests.add(milestone("magic_moon_altar", "§b月华初启",
+                "制作一座月光祭坛（夜晚露天可为月光水晶充能）",
+                "hubsuite:moon_altar", "have:hubsuite:moon_altar", 1,
+                "hubsuite:moon_crystal*1", "minecraft:amethyst_shard*4"));
+
+        quests.add(milestoneReq("magic_moon_crystal", "§b凝月成晶",
+                "获得月光水晶并放上月光祭坛吸收月光能",
+                "hubsuite:moon_crystal", "have:hubsuite:moon_crystal", 1,
+                "magic_moon_altar",
+                "minecraft:lapis_lazuli*8", "minecraft:gold_ingot*4"));
+
+        quests.add(milestoneReq("magic_pedestals", "§d星阵基座",
+                "准备 4 座魔法基座（环绕虚月祭坛承托配材与供能晶体）",
+                "hubsuite:magic_pedestal", "have:hubsuite:magic_pedestal", 4,
+                "magic_moon_crystal",
+                "hubsuite:magic_pedestal*4", "minecraft:amethyst_shard*4"));
+
+        quests.add(milestoneReq("magic_lunar_void_altar", "§5虚月祭坛",
+                "制作虚月祭坛（在经典空岛配合 8 座基座按月相启动仪式，可用 JEI 查配方）",
+                "hubsuite:lunar_void_altar", "have:hubsuite:lunar_void_altar", 1,
+                "magic_pedestals",
+                "hubsuite:lunar_spyglass*1"));
+
+        quests.add(milestoneReq("magic_void_core", "§5深渊汲虚",
+                "在经典空岛 Y≤-48 深渊收集蚀空凝晶并获得虚空晶核",
+                "hubsuite:void_core", "have:hubsuite:void_core", 1,
+                "magic_lunar_void_altar",
+                "minecraft:ender_pearl*4", "minecraft:amethyst_shard*8"));
+
+        quests.add(milestoneReq("magic_trinket_resonance", "§6虚月饰品",
+                "获得虚空护符（按 B 键或 /trinket 佩戴饰品，月/虚空 1:1 佩戴触发 -25% 能耗共鸣）",
+                "hubsuite:void_charm", "have:hubsuite:void_charm", 1,
+                "magic_void_core",
+                "hubsuite:blazing_moon_crystal*1"));
 
         // ── 可重复交付 ──
         quests.add(deliver("deliver_cobble", "§7收石头", "交 64 个圆石换一颗钻石",
@@ -159,6 +226,14 @@ public final class QuestPresets {
         quests.add(deliver("deliver_log", "§a收木头", "交 64 个原木换骨粉",
                 "minecraft:bone_meal", "minecraft:oak_log", 64,
                 "minecraft:bone_meal*16", "minecraft:oak_sapling*4"));
+
+        quests.add(deliver("deliver_ocean_fish", "§b收购海鱼", "交 16 条生鳕鱼换取绿宝石与鱼饵",
+                "minecraft:emerald", "minecraft:cod", 16,
+                "minecraft:emerald*3", "hubsuite:refined_bait*4"));
+
+        quests.add(deliver("deliver_lava_fish", "§c收购熔岩鱼", "交 2 条余烬岩鱼换取狱火秘饵与下界合金碎片",
+                "hubsuite:ember_bait", "hubsuite:ember_rockfish", 2,
+                "hubsuite:infernal_bait*4", "minecraft:netherite_scrap*1"));
 
         // ── 每日任务 ──
         quests.add(daily("daily_mine_128", "§7每日·采矿", "今天挖 128 个石头",
@@ -183,6 +258,13 @@ public final class QuestPresets {
     private static Quest milestone(String id, String name, String description, String icon,
                                    String goal, int amount, String... rewards) {
         return build(Quest.Kind.MILESTONE, id, name, description, icon, goal, amount, rewards);
+    }
+
+    private static Quest milestoneReq(String id, String name, String description, String icon,
+                                      String goal, int amount, String requires, String... rewards) {
+        Quest quest = build(Quest.Kind.MILESTONE, id, name, description, icon, goal, amount, rewards);
+        quest.requires = requires == null ? "" : requires;
+        return quest;
     }
 
     private static Quest deliver(String id, String name, String description, String icon,

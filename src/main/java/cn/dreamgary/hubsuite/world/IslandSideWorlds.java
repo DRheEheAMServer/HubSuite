@@ -48,8 +48,8 @@ public final class IslandSideWorlds {
             if (main == null) {
                 continue;   // 这个岛型没有对应维度（配置里删了/加载失败）
             }
-            ResourceKey<Level> nether = type.ownNether ? createNether(sub, type) : null;
-            ResourceKey<Level> end = type.ownEnd ? createEnd(sub, type) : null;
+            ResourceKey<Level> nether = type.ownNether ? createNether(sub, type, main.save()) : null;
+            ResourceKey<Level> end = type.ownEnd ? createEnd(sub, type, main.save()) : null;
             if (nether != null || end != null) {
                 PortalLinks.register(main.dimension(), nether, end);
                 HubSuite.logger().info("岛屿维度 '{}' 的独立维度已就绪：下界={} 末地={}",
@@ -63,7 +63,8 @@ public final class IslandSideWorlds {
         }
     }
 
-    private static ResourceKey<Level> createNether(SubServer sub, IslandConfig.IslandType type) {
+    private static ResourceKey<Level> createNether(SubServer sub, IslandConfig.IslandType type,
+                                                   IsolatedSave playerDataOwner) {
         var server = sub.level().getServer();
         if (server == null) {
             return null;
@@ -73,7 +74,7 @@ public final class IslandSideWorlds {
         if ("vanilla".equals(preset)) {
             LevelStem stem = WorldFactory.vanillaStem(server, true);
             return stem == null ? null
-                    : spawnAndRegister(sub, type, "nether", "下界", stem, 64.5, false);
+                    : spawnAndRegister(sub, type, "nether", "下界", stem, 64.5, false, playerDataOwner);
         }
         ChunkGenerator generator;
         double spawnY;
@@ -94,10 +95,11 @@ public final class IslandSideWorlds {
             generator = WorldFactory.voidGenerator(server, Biomes.NETHER_WASTES);
         }
         LevelStem stem = WorldFactory.netherStem(server, generator);
-        return spawnAndRegister(sub, type, "nether", "下界", stem, spawnY, true);
+        return spawnAndRegister(sub, type, "nether", "下界", stem, spawnY, true, playerDataOwner);
     }
 
-    private static ResourceKey<Level> createEnd(SubServer sub, IslandConfig.IslandType type) {
+    private static ResourceKey<Level> createEnd(SubServer sub, IslandConfig.IslandType type,
+                                                IsolatedSave playerDataOwner) {
         var server = sub.level().getServer();
         if (server == null) {
             return null;
@@ -108,16 +110,17 @@ public final class IslandSideWorlds {
         }
         // 末地固定落在 (100, 50, 0) 的黑曜石平台上（原版 ServerLevel 构造时就铺好了）
         PlayableWorld.SpawnPoint spawn = new PlayableWorld.SpawnPoint(100.5, 50.0, 0.5, 0.0F, 0.0F);
-        return sub.createSideDimension(type.id + "_end", "末地", stem, sub.config().seed, spawn);
+        return sub.createSideDimension(type.id + "_end", "末地", stem, sub.config().seed, spawn, playerDataOwner);
     }
 
     private static ResourceKey<Level> spawnAndRegister(SubServer sub, IslandConfig.IslandType type,
                                                        String suffix, String label,
                                                        LevelStem stem, double spawnY,
-                                                       boolean islandNether) {
+                                                       boolean islandNether,
+                                                       IsolatedSave playerDataOwner) {
         PlayableWorld.SpawnPoint spawn = new PlayableWorld.SpawnPoint(0.5, spawnY, 0.5, 0.0F, 0.0F);
         ResourceKey<Level> key = sub.createSideDimension(type.id + "_" + suffix, label, stem,
-                sub.config().seed, spawn);
+                sub.config().seed, spawn, playerDataOwner);
         if (key != null && islandNether) {
             // 这种下界要在传送门落点下面补一座下界岩小岛（见 PortalBlockDestinationMixin）
             PortalLinks.registerIslandNether(key);

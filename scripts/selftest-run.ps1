@@ -1,4 +1,4 @@
-# 跑一次服务端 + 自检，**以日志里的结果行为准**（不依赖 RCON 响应）。
+﻿# 跑一次服务端 + 自检，**以日志里的结果行为准**（不依赖 RCON 响应）。
 #
 # 为什么不用 scripts/dev-server.sh：它的 RCON 客户端 60 秒读超时就放弃，
 # 而自检（延迟判定 + 世界生成）可能跑好几分钟 —— 收不到响应就误判失败，
@@ -17,8 +17,13 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
-$env:JAVA_HOME = "$env:USERPROFILE\scoop\apps\openjdk25\current"
-$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+if (-not $env:JAVA_HOME) {
+    $scoopJdk = "$env:USERPROFILE\scoop\apps\openjdk25\current"
+    if (Test-Path $scoopJdk) {
+        $env:JAVA_HOME = $scoopJdk
+        $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+    }
+}
 
 if ($Wipe) {
     Write-Host "[wipe] 清档（清数据 = 连地图一起清）"
@@ -30,22 +35,16 @@ if ($Wipe) {
         if (Test-Path $t) { Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
-Get-ChildItem run -Recurse -Filter "session.lock" -ErrorAction SilentlyContinue | Remove-Item -Force
+if (Test-Path run) { Get-ChildItem run -Recurse -Filter "session.lock" -ErrorAction SilentlyContinue | Remove-Item -Force }
 if (Test-Path $LogFile) { Remove-Item $LogFile -Force -ErrorAction SilentlyContinue }
 
-# 命令文件：先 sleep 占位（cmd 没有 sleep），再发自检，最后停服。
-# 服务端控制台按平台默认字符集读 stdin（简中 Windows = GBK）。
-$cmdFile = Join-Path $root "run\selftest-commands.txt"
-$lines = @(
-    "ping -n $($WaitSec + 1) 127.0.0.1 > nul",
-    "hub selftest",
-    "ping -n 900 127.0.0.1 > nul",
-    "stop"
-)
-[System.IO.File]::WriteAllLines($cmdFile, $lines, [System.Text.Encoding]::GetEncoding(936))
+# 新 checkout 上 run\ 可能还不存在，先建出来
+$runDir = Join-Path $root "run"
+if (-not (Test-Path $runDir)) { New-Item -ItemType Directory -Force -Path $runDir | Out-Null }
 
-$inner = "gradlew.bat runServer --console=plain > `"$LogFile`" 2>&1 < `"$cmdFile`""
-Write-Host "[server] 启动（等待 ${WaitSec}s 后执行 hub selftest，最多等 $TimeoutSec 秒）"
+# 使用 -Dhubsuite.selftest=<秒> 触发无人值守自检，不再向服务端 stdin 喂 ping 命令
+$inner = "gradlew.bat runServer -Dhubsuite.selftest=$WaitSec --console=plain > `"$LogFile`" 2>&1"
+Write-Host "[server] 启动（等待 ${WaitSec}s 后自动执行 hub selftest，最多等 $TimeoutSec 秒）"
 $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $inner -WorkingDirectory $root -NoNewWindow -PassThru
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()

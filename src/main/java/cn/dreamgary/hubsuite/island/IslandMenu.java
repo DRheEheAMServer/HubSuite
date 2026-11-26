@@ -78,7 +78,7 @@ public final class IslandMenu {
         if (existing.isPresent()) {
             var island = existing.get();
             lore.add("\u00A78你的岛：方格 (" + island.plotX + ", " + island.plotZ + ")");
-            lore.add("\u00A78坐标：" + manager.plotCenter(island.plotX, island.plotZ).toShortString());
+            lore.add("\u00A78坐标：" + manager.anchorOf(island).toShortString());
             lore.add("");
             lore.add("\u00A7e▶ 点击回岛");
         } else {

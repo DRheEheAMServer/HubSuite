@@ -65,7 +65,7 @@ public final class ChestMenuScreen {
         }
     }
 
-    private static final Map<UUID, Open> OPEN = new HashMap<>();
+    private static final Map<UUID, Open> OPEN = new java.util.concurrent.ConcurrentHashMap<>();
 
     private ChestMenuScreen() {
     }
@@ -351,7 +351,7 @@ public final class ChestMenuScreen {
     /** 拖拽/快捷移动等操作也要吞掉，避免物品被搬走。 */
     public static boolean shouldBlockInteraction(ServerPlayer player, int containerId) {
         Open open = OPEN.get(player.getUUID());
-        if (open == null) {
+        if (open == null || open.containerId != containerId) {
             return false;
         }
         return player.containerMenu != null && player.containerMenu.containerId == containerId;

@@ -254,6 +254,10 @@ public final class FishingPresets {
                 entry("minecraft:tropical_fish", 18.0, "1-2", "uncommon",
                         "warm_ocean", "lukewarm_ocean", "deep_lukewarm_ocean"),
                 entry("minecraft:pufferfish", 12.0, "1-2", "uncommon"),
+                entry("hubsuite:coral_butterflyfish", 9.0, "1", "uncommon",
+                        "warm_ocean", "lukewarm_ocean", "deep_lukewarm_ocean"),
+                entry("hubsuite:frostfin_cod", 10.0, "1", "uncommon",
+                        "frozen_ocean", "deep_frozen_ocean"),
                 entry("minecraft:ink_sac", 10.0, "1-3", "common"),
                 entry("minecraft:cod", 6.0, "1", "common",
                         "frozen_ocean", "deep_frozen_ocean"),
@@ -266,6 +270,9 @@ public final class FishingPresets {
                 entry("minecraft:prismarine_shard", 16.0, "2-4", "common"),
                 entry("minecraft:prismarine_crystals", 14.0, "1-3", "uncommon"),
                 entry("minecraft:sponge", 8.0, "1", "rare"),
+                entry("hubsuite:abyssal_angler", 7.0, "1", "rare",
+                        "deep_cold_ocean", "deep_lukewarm_ocean", "deep_frozen_ocean"),
+                entry("hubsuite:moonlight_jelly", 7.0, "1", "rare"),
                 entry("minecraft:sea_lantern", 6.0, "1", "rare"),
                 // 乌龟鳞甲（老版本叫 scute，26.1 的物品 id 变了，这里用确定存在的）
                 entry("minecraft:nautilus_shell", 6.0, "1-2", "rare"),
@@ -294,6 +301,7 @@ public final class FishingPresets {
                 entry("minecraft:enchanted_golden_apple", 4.0, "1", "legendary"),
                 entry("minecraft:trident", 4.0, "1", "legendary"),
                 entry("minecraft:heart_of_the_sea", 6.0, "1", "legendary"),
+                entry("hubsuite:golden_koi", 4.0, "1", "legendary"),
                 entry("minecraft:netherite_scrap", 2.0, "1", "legendary")));
 
         // ── 垃圾：按群系分化（暖海沙子 / 冷水洋砂砾 / 冻洋冰块）──
@@ -338,9 +346,11 @@ public final class FishingPresets {
                 entry("minecraft:glowstone_dust", 16.0, "1-4", "common"),
                 entry("minecraft:quartz", 14.0, "1-3", "common"),
                 entry("minecraft:gold_nugget", 12.0, "1-5", "common"),
+                entry("hubsuite:ember_rockfish", 9.0, "1", "uncommon"),
                 entry("minecraft:fire_charge", 8.0, "1-2", "uncommon"),
                 entry("minecraft:nether_brick", 8.0, "1-3", "common"),
                 entry("minecraft:soul_sand", 30.0, "1-3", "common", "soul_sand_valley"),
+                entry("hubsuite:soulfire_eel", 10.0, "1", "rare", "soul_sand_valley"),
                 entry("minecraft:soul_soil", 24.0, "1-3", "common", "soul_sand_valley"),
                 entry("minecraft:nether_wart", 18.0, "1-2", "common", "soul_sand_valley"),
                 entry("minecraft:crimson_fungus", 24.0, "1-2", "common", "crimson_forest"),
@@ -349,6 +359,7 @@ public final class FishingPresets {
                 entry("minecraft:warped_fungus", 24.0, "1-2", "common", "warped_forest"),
                 entry("minecraft:twisting_vines", 14.0, "1-3", "common", "warped_forest"),
                 entry("minecraft:basalt", 30.0, "1-4", "common", "basalt_deltas"),
+                entry("hubsuite:basalt_snapper", 10.0, "1", "rare", "basalt_deltas"),
                 entry("minecraft:blackstone", 24.0, "1-3", "common", "basalt_deltas"),
                 entry("minecraft:magma_block", 10.0, "1", "uncommon", "basalt_deltas")));
 
@@ -360,6 +371,7 @@ public final class FishingPresets {
                 entry("minecraft:crying_obsidian", 6.0, "1", "rare"),
                 entry("minecraft:golden_apple", 6.0, "1", "rare"),
                 entry("minecraft:netherite_scrap", 4.0, "1", "legendary"),
+                entry("hubsuite:magma_dragonfish", 4.0, "1", "legendary"),
                 entry("minecraft:enchanted_golden_apple", 2.0, "1", "legendary"),
                 entry("minecraft:ancient_debris", 1.0, "1", "legendary")));
 
@@ -373,8 +385,8 @@ public final class FishingPresets {
                 entry("minecraft:rotten_flesh", 8.0, "1-2", "common")));
 
         lava.normalize();
+        // 只有海岛服有渔获表：空岛服（经典空岛）走原版渔获
         config.tables.put("hubsuite:skyblock_ocean_nether", lava);
-        config.tables.put("hubsuite:skyblock_classic_nether", lava);
 
         config.normalize();
         return config;

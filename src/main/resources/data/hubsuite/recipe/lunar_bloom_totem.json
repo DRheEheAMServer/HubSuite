@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " L ",
+    "MSM",
+    " S "
+  ],
+  "key": {
+    "L": "minecraft:lapis_lazuli",
+    "M": "minecraft:moss_block",
+    "S": "minecraft:stone_bricks"
+  },
+  "result": {
+    "id": "hubsuite:lunar_bloom_totem",
+    "count": 1
+  }
+}

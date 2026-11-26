@@ -26,14 +26,22 @@ public final class HubSuiteClient implements ClientModInitializer {
     public void onInitializeClient() {
         ClientMenuTypes.register();
         ClientItems.register();
+        cn.dreamgary.hubsuite.client.magic.ClientMagicRegistry.register();
+        cn.dreamgary.hubsuite.client.ocean.ClientOceanRegistry.register();
+        // 创造模式标签页（与服务端同 id）：没有它，物品在创造模式物品栏与 JEI 里都找不到
+        cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.register();
         ClientItems.registerAssetCheck();
         ClientHandshake.register();
+        ClientLavaFishing.register();
+        ClientRodTooltip.register();   // 钓竿 tooltip：平时看总数，Shift 看部件明细
+        cn.dreamgary.hubsuite.client.magic.ClientMagicTooltip.register();
+        cn.dreamgary.hubsuite.client.ocean.ClientOceanTooltip.register();
+        ClientTrinketUi.register();
+        ClientUpdateChecker.register();
 
-        // 开发用自动连服（不传 -Dhubsuite.autoconnect 就什么都不做）
-        String autoConnect = System.getProperty(DevAutoConnect.PROPERTY, "");
-        if (!autoConnect.isBlank()) {
-            DevAutoConnect.register(autoConnect);
-            DevItemWatch.register();
+        // 开发调试工具仅在开发环境启用（生产客户端 JAR 已剔除 Dev*.class）
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            registerDevTools();
         }
 
         LOGGER.info("HubSuite 客户端 {} 已加载（握手 + 真物品 + 分层钓竿 + 装配台界面）", version());
@@ -70,5 +78,34 @@ public final class HubSuiteClient implements ClientModInitializer {
     /** 协议号别名，方便客户端内部引用。 */
     public static int protocol() {
         return HandshakePayloads.PROTOCOL;
+    }
+
+    private static void registerDevTools() {
+        String autoConnect = System.getProperty("hubsuite.autoconnect", "");
+        if (autoConnect.isBlank()) {
+            return;
+        }
+        invokeDev("DevAutoConnect", "register", new Class<?>[]{String.class}, autoConnect);
+        invokeDev("DevItemWatch", "register", new Class<?>[0]);
+        if (System.getProperty("hubsuite.smoke") != null) {
+            invokeDev("DevSmoke", "register", new Class<?>[0]);
+        }
+        String shotDir = System.getProperty("hubsuite.shot");
+        if (shotDir != null) {
+            invokeDev("DevShot", "register", new Class<?>[]{String.class}, shotDir);
+        }
+        if (System.getProperty("hubsuite.drive") != null) {
+            invokeDev("DevDrive", "register", new Class<?>[]{String.class},
+                    shotDir != null ? shotDir : "/tmp/hubsuite-drive");
+        }
+    }
+
+    private static void invokeDev(String simpleName, String method, Class<?>[] types, Object... args) {
+        try {
+            Class<?> cls = Class.forName("cn.dreamgary.hubsuite.client." + simpleName);
+            cls.getMethod(method, types).invoke(null, args);
+        } catch (Throwable t) {
+            LOGGER.warn("加载开发调试类 {} 失败：{}", simpleName, t.toString());
+        }
     }
 }

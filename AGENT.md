@@ -3,14 +3,14 @@
 > 本文件是**长期有效的工作约定 + 项目现状**：怎么搭环境、怎么改、怎么验、什么不能做，
 > 以及关键代码地图、踩坑记录与未验证清单。
 >
-> 项目由人类作者与 AI Agent 协作开发，详见 [README.md](README.md) 的「AI 参与声明」。
+> 项目由人类作者与 AI Agent 协作开发，详见 [README.md](README.md) 的「关于」。
 
 ---
 
 ## 一、动手前必读
 
 1. **先读 git 日志**（`git log`）—— 当前版本、已验证 / 未验证清单与待办都记录在提交历史里。
-   动手前把本文件的「七、环境坑」「八、排查手法」「十、Mixin 约定」看一遍，很多坑踩一次要花几小时。
+   动手前把本文件的「六、环境坑」「七、排查手法」「九、Mixin 约定与清单」看一遍，很多坑踩一次要花几小时。
 2. **说话用中文**（作者是中文用户）。
 3. **不要声称验证过没验证的东西**。没验就明说「未验证」。这是本项目最重要的一条约定 ——
    作者会亲手实测，虚报会被当场抓到，而且会浪费他更多时间。
@@ -19,8 +19,8 @@
 
 ## 二、项目速览
 
-**HubSuite** —— Minecraft **26.1.2** 的**纯服务端** Fabric 模组（Java 25），
-把一个服务端变成「大厅 + 多个互相独立的子服」（生存 / 创造 / 空岛）。
+**HubSuite** —— Minecraft **26.1.2** 的**双端配套** Fabric 模组（Java 25），
+把一台服务端变成「大厅 + 多个互相独立的子服」（生存 / 创造 / 空岛），配套客户端模组 `hubsuite-client` 提供真物品、分层钓竿渲染与装配台界面。
 
 | 项 | 值 |
 |---|---|
@@ -28,8 +28,8 @@
 | 版本 | `gradle.properties` 的 `server_version` = **0.5.0-SNAPSHOT**；客户端 `client_version` 独立递增（见 docs/分发与更新.md） |
 | 构建 | Gradle 9.7.1 + Loom 1.18-SNAPSHOT |
 | 映射 | **官方 Mojang 名，不 remap**（26.1 起官方不再混淆；build.gradle 无 mappings、无 remapJar） |
-| 产物 | `build/libs/hubsuite-<版本>.jar`（另有 `-sources.jar`） |
-| 规模 | 服务端 116 个 Java 文件 / 28 个 Mixin；共用契约 4 个（`common/`，双端各编译一份）；客户端 3 个；自检 268 项 |
+| 产物 | `build/libs/hubsuite-<版本>.jar`（服务端）与 `client/build/libs/hubsuite-client-<版本>.jar`（客户端） |
+| 规模 | 服务端 127 个 Java 文件 / 31 个 Mixin；共用 17 个（`common/`，双端各编译一份）；客户端 15 个（含 3 个 mixin）；自检约 270 项 |
 
 ### 架构要点（改之前必须理解）
 
@@ -38,10 +38,10 @@
 - 所有自定义维度用 **`hubsuite:` 自有 key**，不占用 `minecraft:overworld` 等原版 key
 - 软依赖（运行时探测，缺失要能降级）：LuckPerms / HuskHomes / Placeholder API / fabric-permissions-api / JEI
   - **JEI 服务端没有可调用的 API**：它的插件接口（IModPlugin）只在客户端加载，所以 JeiIntegration
-    只做探测 + 记录，不引用 JEI 的类；客户端 JEI 的配方页数据走原版配方同步（我们的配方全是
-    shaped/shapeless，物品由 Polymer 改写 SlotDisplay/Ingredient），配方转移由服务端 JEI 通用处理
-- **硬依赖：Polymer**（自定义物品必须靠它映射给原版客户端；缺了 Fabric Loader 直接拒绝加载本模组）。
-  build.gradle 里 `compileOnly polymer-core` + `runtimeOnly polymer-bundled`（后者只给 dev 运行时用）
+    只做探测 + 记录，不引用 JEI 的类；自定义物品已作为真物品在两端注册，客户端 JEI 可直接查看物品与配方。
+- **客户端强制安装**（0.6 收尾起）：自定义物品在两端都注册真 id，对齐交给 Fabric 的注册表同步；
+  **没装客户端的玩家会被注册表同步直接断开**（这就是强制安装的实现，不依赖自研开关）。
+  Polymer 与资源包下发**已整体下线**，build.gradle 里没有任何 Polymer 依赖。
 - **维度只能启动时建立**：`MinecraftServer.levels` 是只读映射，运行期无法新建/卸载 → 增删子服必须重启
 
 ---
@@ -66,7 +66,7 @@ $env:JAVA_HOME = $j; $env:PATH = "$j\bin;$env:PATH"
 > ⚠️ 构建必须能读写 `~/.gradle`。文件沙箱只给 workspace 写权限时会失败在
 > wrapper 锁文件上（`FileNotFoundException ... .zip.lck (Operation not permitted)`）。
 > 另外 `maven.fabricmc.net` 很慢，Loom 首次拉取可能 `Read timed out`；可重试，
-> 或用 `curl -C -` 断点续传补齐缓存（缓存路径见「九」）。
+> 或用 `curl -C -` 断点续传补齐缓存（本地 Gradle 缓存位于 `~/.gradle/caches/fabric-loom/`）。
 
 ### 起测试服务端
 
@@ -86,7 +86,7 @@ $env:JAVA_HOME = $j; $env:PATH = "$j\bin;$env:PATH"
 ```
 
 - 服务端是 `online-mode=false`，机器人可直连。
-- 自检结果看 `run/logs/latest.log` 里的 `通过 268 项，失败 0 项`。
+- 自检结果看 `run/logs/latest.log` 里的 `通过 268~270 项，失败 0 项`（跨 tick 项没跑完就不计入，不报失败 —— 总数比平时少 1~2 且零失败是正常的）。
 - 控制台命令：`hub selftest`（也可在游戏内 `/hub selftest`）。
 - **无人值守发命令**：`pwsh -File scripts/rcon.ps1 -Command "give Player123 hubsuite:nether_string 3"`
   （RCON 25575，密码在 `run/server.properties`；26.1.2 的回包时序很挑，所以只保证命令发出去）。
@@ -110,9 +110,7 @@ $env:JAVA_HOME = $j; $env:PATH = "$j\bin;$env:PATH"
 - 🔴 **跑完务必关掉客户端窗口**：它开着就一直占 Gradle 的构建锁，
   再跑任何 Gradle 任务（包括服务端自检）都会卡在等锁上。
 - **自动连服（开发用）**：`:client:runClientAuto` 带 `-Dhubsuite.autoconnect=localhost:25566`，
-  客户端初始加载结束就自动连本机测试服（先起服务端）。手动用 `:client:runClient` 也可以，
-  但进服时**必须接受服务器资源包**（Polymer 下发的那个），否则会卡在配置阶段直到掉线 ——
-  自动连服这条路会自己选"启用"。
+  客户端初始加载结束就自动连本机测试服（先起服务端）。手动用 `:client:runClient` 也可以。
 - 原版的 `--quickPlayMultiplayer` 在 26.1 上实测**不生效**（参数进了命令行也不连），
   所以自动连服是本模组自己实现的（`DevAutoConnect`）。
 - **开发模式下客户端会自动注册/登录**（`hubsuite-dev`），并关掉登录期间残留的对话框 ——
@@ -191,6 +189,10 @@ rm -f run/*/session.lock run/usercache.json run/ops.json
 | **`server.properties` 不能有非 ASCII** | Java Properties 按 ISO-8859-1 读，中文注释会 `MalformedInputException` |
 | **不能直接删掉已经发出去的物品** | 物品从注册表消失后，老存档里那些栈会被读成**空气**（玩家东西凭空蒸发）。做法：留成**遗留别名**（注册还在、不再产出、模型指回原版）+ 进服时换算成新物品（附魔与名字跟着走、**磨损比例照搬**）—— 见 `LegacyLavaRodItem` / `LegacyItemMigration` |
 | **访问加宽（AW）的三个坑** | ① 头部必须在**第一行**（注释写在前面会让 Loom 认不出）；② 本模组用官方名不 remap，命名空间写 **`official`** 而不是 `named`；③ 别自己重写原版私有算法 —— 用 AW 开放出来直接调（青金石附魔就是这么做的，`EnchantmentMenu.getEnchantmentList` 的参数顺序还是反直觉的：`(registries, stack, 种子偏移, 等级)`） |
+| **26.1 没有「容器变化 → 通知菜单」** | `Container` 没有 `addListener`、`AbstractContainerMenu.slotsChanged` 全类没有任何内部调用（反汇编确认）。容器要通知菜单得自己持有菜单引用主动调（`TransientCraftingContainer` 那样）。自定义菜单的「放料即生效」必须挂在 `clicked` 的 super 之后 —— 否则就是死代码（装配台「换不了配件」就是这么来的） |
+| **加界面不用新写 Screen** | 布局放 `common/ui/UiLayout`（两端共用），客户端 `HubSuiteContainerScreen` 通用渲染；菜单槽位坐标也**从布局取**，画框与真实槽位不可能错位（自检守着）。新台子 = 一份布局 + 一张底图 |
+| **原版铁砧会吞掉整叠材料** | `AnvilMenu.onTake` 里 `repairItemCountCost <= 0` 时直接 `inputSlots.setItem(1, EMPTY)` —— 定制铁砧产物时**必须**把该字段设成你要消耗的个数，否则玩家放一叠钻石只打一次升级也全没了 |
+| **原版钓竿收竿会 `hurtAndBreak(1)`** | `FishingRodItem.use` 的顺序是 `retrieve()`（我们的耐久逻辑在里面）→ `hurtAndBreak(1)`。耐久条映射把「已坏」放在 `MAX_DAMAGE-1`，这一下正好打满 → **物品被原版销毁**。做法：带我们数据的物品在 `ItemStack.applyDamage` 上拦掉原版扣耐久（耐久归我们管） |
 | **`@Shadow` 只能影子目标类自己声明的字段** | 影子父类字段会让 mixin **应用失败、服务端起不来**：`@Shadow field inputSlots was not located in the target class`（铁砧那次踩到，`inputSlots` 在 `ItemCombinerMenu` 上）。改用公开的 `getSlot(i)` / accessor mixin |
 | **自定义方块/方块实体必须在两端注册** | Fabric 的注册表同步（fabric-registry-sync-v0）会把服务端注册表里的自定义条目发给客户端，**客户端不认识就直接断开**：`Received a registry entry that is unknown to this client.` —— 方块、方块实体类型、物品、菜单类型这四样两端必须一一对应（客户端那份可以是普通方块，但必须存在） |
 | **26.1 没法定制容器界面（直接路径）** | `MenuScreens.register` 是 private、`MenuScreens$ScreenConstructor` 是**包私有**，Fabric 也没提供注册入口（fabric-menu-api-v1 / screen-handler-api-v1 都没有）。自定义菜单要开自己的界面，只能在 `MenuScreens.create` 头部 mixin 拦下来自己建（见 `client/.../mixin/MenuScreensMixin`） |
@@ -271,14 +273,14 @@ if (level.getChunkSource().getChunkNow(cx, cz) == null) { /* 登记待办，下�
 | `world/PlayerDataRouter.java` + `world/PlayerStateStash.java` + `mixin/PlayerListStorageMixin.java` | 背包 / 经验按子服隔离（内存暂存 + 磁盘两份） |
 | `world/PlayerRouter.java` | 切服主流程（`sendTo`） |
 | `world/ServerInternals.java` / `ServerLevelsAccess.java` / `PlayerListAccess.java` | 访问原版内部字段的唯一出口（放业务包，见「十」） |
-| `world/SelfTest.java` | **全部自检**（268 项）。加检查看这里 |
+| `world/SelfTest.java` | **全部自检**（约 270 项）。加检查看这里 |
 | `island/IslandService.java` + `island/IslandManager.java` | 空岛：建岛、归属、出生点（**保护已删**） |
 | `world/IslandSideWorlds.java` + `world/LavaSeaGenerator.java` | 岛屿维度各自的下界/末地（空岛虚空式、海岛岩浆海） |
 | `world/NaturalIslandPlacer.java` | 自然岛：地形 + 宝箱 + 刷怪笼 + **结构模板与底座**（跨 tick 补铺、落盘去重） |
 | `world/StructureFoundations.java` | 悬空结构的底座（区块加载时按 `structureFoundations` 名单补，默认猪灵堡垒、不含要塞） |
 | `feature/FishingLoot.java` + `feature/FishingPresets.java` + `mixin/FishingHookLootMixin.java` | 渔获：按维度挂表、按群系分池、稀有度（含岩浆表） |
 | `feature/FishingBait.java` + `feature/FishingGameplay.java` | 副手钓饵（**tag 驱动** `#hubsuite:fishing_bait` / `#hubsuite:fishing_bait_nether`，档次=稀有度；水/岩浆分族加速、钓到才扣）与岩浆可钓判定 |
-| `feature/item/HubSuiteItems.java` + `feature/item/LavaRodItem.java` | 5 个自定义物品（Polymer 映射；`Item.Properties.setId` 必填） |
+| `feature/item/HubSuiteItems.java` + `feature/item/LegacyLavaRodItem.java` | 自定义物品（地狱线 + 三种渔桶 + 遗留别名熔岩钓竿；`Item.Properties.setId` 必填） |
 | `mixin/FishingHookMixin.java` + `FishingHookAccessor.java` + `FishingRodCastMixin.java` + `LavaFishingHook.java` | 岩浆算水（`tick` 里两处 `FluidState.is` 都要改）、钓饵加速、抛竿打标记 |
 | `feature/CommandGuard.java` | 命令闸门（创造服屏蔽 40+ 条作弊指令） |
 | `feature/PermissionService.java` | 三级权限降级 |
@@ -314,7 +316,7 @@ if (level.getChunkSource().getChunkNow(cx, cz) == null) { /* 登记待办，下�
 
 ---
 
-## 九、Mixin 约定与清单（22 个）
+## 九、Mixin 约定与清单（服务端 31 个 + 客户端 3 个）
 
 ### 约定（都踩过坑）
 
@@ -361,9 +363,20 @@ if (level.getChunkSource().getChunkNow(cx, cz) == null) { /* 登记待办，下�
 | Mixin | 作用 |
 |---|---|
 | `ServerCommonPacketListenerMixin` | 接收对话框表单提交（`handleCustomClickAction`） |
-| `ServerGamePacketListenerCommandMixin` | 命令闸门（Fabric 无「命令即将执行」事件） |
+| `ServerGamePacketListenerCommandMixin` | 命令闸门与家命令命名空间改写 |
 | `ServerGamePacketListenerMenuMixin` | 接管箱子式菜单点击 |
 | `BlockItemPlaceMixin` | 任务精确统计「放置方块」（真的放下才计数） |
+| `CommonPlayerSpawnInfoMixin` | 客户端维度 key 伪装（让光影识别自定义下界/末地） |
+| `FishingHookAccessor` / `FishingHookMixin` / `FishingHookLootMixin` | 岩浆钓鱼物理、粒子、耐烧灼与按群系分池渔获 |
+| `FishingRodCastMixin` / `EntityLavaHurtMixin` / `RodDurabilityMixin` | 断竿拦截、岩浆钩同步与自定义耐久接管 |
+| `AnvilRodUpgradeMixin` / `ItemCombinerMenuAccessor` | 铁砧钓竿升级与经验花费 |
+
+### 客户端 Mixin（3 个）
+
+| Mixin | 作用 |
+|---|---|
+| `MenuScreensMixin` | 拦截 `AssemblyMenu` 构建客户端 `HubSuiteContainerScreen` |
+| `ClientFishingHookMixin` / `ClientEntityLavaHurtMixin` | 客户端岩浆浮标物理同步与免火表现 |
 
 ---
 
@@ -446,6 +459,8 @@ tag 带 `v`；服务端产物 `build/libs/hubsuite-<server_version>.jar`，客�
 4. 从 GitHub 真实下载校验：zip 有效、fabric.mod.json 的 version 对、类数对
 5. Release 挂**两份产物**（服务端 jar + 客户端 jar；客户端没变就挂同一份），
    说明按 docs/分发与更新.md 的三档模板写（无需 / 建议 / 必须更新）
+6. **Release 标题一律带 `v`**：`HubSuite v<版本>（一句话）` —— tag 是 `v<版本>`，标题也必须是
+   （踩过：0.5 的三个 Release 标题漏了 v，跟 0.4 那条线不一致）
 ```
 **发布说明必须如实写**：哪些已验证、哪些没有、升级要不要删存档。不要为了让 release 好看而省略「未验证」。
 
@@ -498,14 +513,14 @@ release 的**提交信息、tag message、release notes** 都是给**使用者�
 
 **已锁定的需求与决策（不要再改）**：
 
-- 目标版本严格锁定 MC 26.1.2；纯服务端 Fabric 模组；单个服务端 + 每子服独立存档
+- 目标版本严格锁定 MC 26.1.2；服务端 + `hubsuite-client` 双端配套 Fabric 模组；单个服务端 + 每子服独立存档
 - 包名 / mod id：`cn.dreamgary.hubsuite` / `hubsuite`
 - 离线服务器（`online-mode=false`），但正版与离线都要注册 + 登录
 - 登录用对话框表单（`TextInput` + `CustomAll` 静默回传）+ PBKDF2 加盐 + SQLite；密码不进聊天 / 命令 / 日志
 - 大厅 NPC 用真 `ServerPlayer` 假人；空岛只做 classic + ocean，不做单方块
 - 扩展性要求：新增子服尽量只改配置
 
-**自检项数演进**：Phase 1 收尾 37 → 空岛三维度改造时 94 → 0.4 收尾 235 → 客户端握手 **244** → 钓竿数据契约 **253** → 客户端真物品 **257** → 钓竿分层渲染 **259** → 物品全量迁移 **261** → 裂纹与抛竿层 **262** → 装配台界面与规则 **263** → 装配台方块 **264** → 钓竿耐久与断线 **265** → 铁砧升级 **266** → 青金石附魔 **267** → 旧竿换算 **268**。
+**自检项数演进**：Phase 1 收尾 37 → 空岛三维度改造时 94 → 0.4 收尾 235 → 客户端握手 **244** → 钓竿数据契约 **253** → 客户端真物品 **257** → 钓竿分层渲染 **259** → 物品全量迁移 **261** → 裂纹与抛竿层 **262** → 装配台界面与规则 **263** → 装配台方块 **264** → 钓竿耐久与断线 **265** → 铁砧升级 **266** → 青金石附魔 **267** → 旧竿换算 **268** → 复查修复 **269**。
 
 **已修复且经作者实测的关键问题**：
 

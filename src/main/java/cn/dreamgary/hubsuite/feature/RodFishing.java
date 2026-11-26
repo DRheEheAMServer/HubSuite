@@ -47,10 +47,14 @@ public final class RodFishing {
     public static boolean onCatch(FishingHook hook) {
         try {
             Player owner = hook.getPlayerOwner();
+            // 用户定的：钓竿系统只限空岛服，别的服当普通原版钓竿
+            if (!cn.dreamgary.hubsuite.rod.RodScope.allowed(hook.level())) {
+                return false;
+            }
             if (!(owner instanceof ServerPlayer player) || !(hook.level() instanceof ServerLevel level)) {
                 return false;
             }
-            ItemStack rod = player.getMainHandItem();
+            ItemStack rod = activeRod(player);
             RodData data = RodData.of(rod);
             if (data == null) {
                 return false;   // 不是"我们的竿" → 原版行为，一个字都不改
@@ -76,5 +80,18 @@ public final class RodFishing {
             HubSuite.logger().debug("钓竿耐久处理失败，沿用原版：{}", t.toString());
             return false;
         }
+    }
+
+    /** 取玩家当前正在使用的自定义钓竿（主手优先，否则回退检查副手）。 */
+    public static ItemStack activeRod(Player player) {
+        if (player == null) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack main = player.getMainHandItem();
+        if (RodData.of(main) != null) {
+            return main;
+        }
+        ItemStack off = player.getOffhandItem();
+        return RodData.of(off) != null ? off : main;
     }
 }

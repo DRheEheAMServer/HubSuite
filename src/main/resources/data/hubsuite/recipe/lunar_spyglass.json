@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " A ",
+    " C ",
+    " L "
+  ],
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "C": "minecraft:copper_ingot",
+    "L": "minecraft:lapis_lazuli"
+  },
+  "result": {
+    "id": "hubsuite:lunar_spyglass",
+    "count": 1
+  }
+}

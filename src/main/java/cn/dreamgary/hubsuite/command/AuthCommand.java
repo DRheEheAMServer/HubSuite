@@ -127,16 +127,22 @@ public final class AuthCommand {
             source.sendFailure(Component.literal("该命令只能由玩家执行。"));
             return 0;
         }
-        var result = auth.register(player.getName().getString(), player.getUUID(),
-                password, confirm, AuthService.ipOf(player.connection.getRemoteAddress()));
-        if (result.ok()) {
-            authManager.authenticated(player);
-            source.sendSuccess(() -> Component.literal(
-                    "\u00A7a注册成功。\u00A77提示：优先使用弹出的对话框，可避免密码留在聊天记录里。"), false);
-        } else {
-            source.sendFailure(Component.literal("\u00A7c" + result.message()));
-        }
-        return result.ok() ? 1 : 0;
+        String name = player.getName().getString();
+        var uuid = player.getUUID();
+        String ip = AuthService.ipOf(player.connection.getRemoteAddress());
+        auth.registerAsync(name, uuid, password, confirm, ip, result -> {
+            if (player.hasDisconnected()) {
+                return;
+            }
+            if (result.ok()) {
+                authManager.authenticated(player);
+                player.sendSystemMessage(Component.literal(
+                        "\u00A7a注册成功。\u00A77提示：优先使用弹出的对话框，可避免密码留在聊天记录里。"));
+            } else {
+                player.sendSystemMessage(Component.literal("\u00A7c" + result.message()));
+            }
+        });
+        return 1;
     }
 
     private int chatLogin(CommandSourceStack source, String password) {
@@ -145,14 +151,20 @@ public final class AuthCommand {
             source.sendFailure(Component.literal("该命令只能由玩家执行。"));
             return 0;
         }
-        var result = auth.login(player.getName().getString(), player.getUUID(),
-                password, AuthService.ipOf(player.connection.getRemoteAddress()));
-        if (result.ok()) {
-            authManager.authenticated(player);
-            source.sendSuccess(() -> Component.literal("\u00A7a登录成功。"), false);
-        } else {
-            source.sendFailure(Component.literal("\u00A7c" + result.message()));
-        }
-        return result.ok() ? 1 : 0;
+        String name = player.getName().getString();
+        var uuid = player.getUUID();
+        String ip = AuthService.ipOf(player.connection.getRemoteAddress());
+        auth.loginAsync(name, uuid, password, ip, result -> {
+            if (player.hasDisconnected()) {
+                return;
+            }
+            if (result.ok()) {
+                authManager.authenticated(player);
+                player.sendSystemMessage(Component.literal("\u00A7a登录成功。"));
+            } else {
+                player.sendSystemMessage(Component.literal("\u00A7c" + result.message()));
+            }
+        });
+        return 1;
     }
 }

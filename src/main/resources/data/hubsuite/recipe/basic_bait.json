@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "minecraft:cod",
+    "minecraft:wheat_seeds",
+    "minecraft:kelp"
+  ],
+  "result": {
+    "id": "hubsuite:basic_bait",
+    "count": 4
+  }
+}

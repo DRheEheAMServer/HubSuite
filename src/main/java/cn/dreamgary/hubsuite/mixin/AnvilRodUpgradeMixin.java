@@ -28,13 +28,38 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AnvilMenu.class)
 public abstract class AnvilRodUpgradeMixin {
 
+    /** 打一次升级消耗几个升级物。 */
+    private static final int UPGRADE_MATERIALS = 1;
+
     @Shadow
     private DataSlot cost;
 
-    @Inject(method = "createResult", at = @At("TAIL"))
+    /**
+     * 原版「这次消耗几个右格物品」。
+     *
+     * <p><b>必须设成 1，否则玩家的整叠材料会被吞掉</b>：反汇编 {@code AnvilMenu.onTake} 确认过 ——
+     * 当 {@code repairItemCountCost <= 0} 时它直接把右格整个清空
+     * （{@code inputSlots.setItem(1, ItemStack.EMPTY)}）；只有 > 0 时才走
+     * 「够就 shrink(该值)、不够就清空」的分支。我们打一次升级只吃 1 个材料。
+     */
+    @Shadow
+    private int repairItemCountCost;
+
+    /*
+     * **必须是 RETURN，不能是 TAIL**（用户实测"铁砧升级无效"的根因）：
+     * AnvilMenu.createResult 里有 **5 个 RETURN**（竿+钻石这种"原版没有的组合"走的是
+     * **早期返回**），TAIL 只挂在最后一个 return 上 —— 那条路径根本执行不到我们的注入。
+     * RETURN 会在每个 return 前都跑一遍，反正我们只在"算得出结果"时才覆盖。
+     */
+    @Inject(method = "createResult", at = @At("RETURN"))
     private void hubsuite$rodUpgrade(CallbackInfo ci) {
         try {
             AnvilMenu self = (AnvilMenu) (Object) this;
+            // 用户定的：铁砧升级只限空岛服
+            var combiner = (cn.dreamgary.hubsuite.mixin.ItemCombinerMenuAccessor) self;
+            if (!cn.dreamgary.hubsuite.rod.RodScope.allowed(combiner.hubsuite$player().level())) {
+                return;
+            }
             ItemStack left = self.getSlot(AnvilMenu.INPUT_SLOT).getItem();
             ItemStack right = self.getSlot(AnvilMenu.ADDITIONAL_SLOT).getItem();
             RodAnvil.Outcome outcome = RodAnvil.combine(left, right);
@@ -43,6 +68,7 @@ public abstract class AnvilRodUpgradeMixin {
             }
             self.getSlot(AnvilMenu.RESULT_SLOT).container.setItem(0, outcome.stack());
             cost.set(outcome.cost());
+            repairItemCountCost = UPGRADE_MATERIALS;   // 只吃 1 个（不设就会吞掉整叠）
         } catch (Throwable t) {
             HubSuite.logger().debug("铁砧升级算结果失败，保留原版：{}", t.toString());
         }

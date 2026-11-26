@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " C ",
+    "MGM",
+    " M "
+  ],
+  "key": {
+    "M": "hubsuite:magma_bait",
+    "C": "minecraft:crying_obsidian",
+    "G": "minecraft:glowstone_dust"
+  },
+  "result": {
+    "id": "hubsuite:infernal_bait",
+    "count": 4
+  }
+}

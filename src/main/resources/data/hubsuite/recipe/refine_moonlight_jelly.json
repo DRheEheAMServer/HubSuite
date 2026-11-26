@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "hubsuite:moonlight_jelly"
+  ],
+  "result": {
+    "id": "hubsuite:abyssal_bait",
+    "count": 2
+  }
+}

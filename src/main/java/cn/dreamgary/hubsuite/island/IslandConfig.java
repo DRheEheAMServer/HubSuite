@@ -96,11 +96,14 @@ public final class IslandConfig {
      */
     public int oceanIslandY = 0;
 
-    /** 掉到该 Y 以下就算掉虚空，送回岛上。 */
-    public int voidY = 0;
+    /** 掉到该 Y 以下就算掉虚空，送回岛上（保留 Y<=-48 的低空虚空侵蚀作业区）。 */
+    public int voidY = -68;
 
     /** 首次进入空岛服是否自动分配并生成一座岛。 */
     public boolean autoCreateOnFirstJoin = true;
+
+    /** 重置岛屿冷却秒数（默认 1800 秒 = 30 分钟；<= 0 表示不限制）。 */
+    public int resetCooldownSeconds = 1800;
 
     /** 默认岛型 id。 */
     public String defaultType = "classic";

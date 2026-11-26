@@ -238,6 +238,8 @@ public final class NpcManager {
         npcs.forEach(HubNpc::despawn);
         npcs.clear();
         byEntity.clear();
+        PENDING_SPAWNS.clear();
+        EXTRA_MENUS.clear();
     }
 
     private void onTick(MinecraftServer server) {

@@ -626,9 +626,21 @@ public final class SubServer implements PlayableWorld {
     public ResourceKey<Level> createSideDimension(String entryId, String label,
                                                   LevelStem stem, long seed,
                                                   PlayableWorld.SpawnPoint spawn) {
+        return createSideDimension(entryId, label, stem, seed, spawn, null);
+    }
+
+    /**
+     * 同上，但允许指定玩家数据存档归属（侧维度应与所属主维度共享玩家存储，
+     * 否则玩家从下界/末地直接切服或下线重登时会读回进门前的旧背包）。
+     */
+    public ResourceKey<Level> createSideDimension(String entryId, String label,
+                                                  LevelStem stem, long seed,
+                                                  PlayableWorld.SpawnPoint spawn,
+                                                  IsolatedSave playerDataOwner) {
         String saveName = "hubsuite_" + config.id + "_" + entryId;
+        IsolatedSave sideSave = null;
         try {
-            IsolatedSave sideSave = IsolatedSave.open(server, saveName,
+            sideSave = IsolatedSave.open(server, saveName,
                     config.displayName + " §7" + label, GameType.SURVIVAL,
                     Difficulty.NORMAL, false);
             ResourceKey<Level> dimension = WorldBuilder.dimensionKey(config.id + "_" + entryId);
@@ -637,17 +649,20 @@ public final class SubServer implements PlayableWorld {
             applySpawn(level, spawn);
             applyWorldBorder(level, rules, spawn);
             sideSave.register(level);
-            /*
-             * 玩家数据必须绑到这份存档上，否则玩家在里面时读写会回落到兜底存档
-             * （大厅），背包就串了 —— 下界/末地都踩过这个坑，别再漏。
-             */
-            sideSave.bindPlayerStorage(dimension);
+            IsolatedSave owner = playerDataOwner != null ? playerDataOwner : sideSave;
+            owner.bindPlayerStorage(dimension);
             RulesManager.register(dimension, rules);
             entries.put(entryId, new Entry(entryId, dimension, level, sideSave, spawn, label));
             HubSuite.logger().info("子服 '{}' 新增侧维度 '{}'：{}（存档 {}）",
                     config.id, entryId, dimension.identifier(), saveName);
             return dimension;
         } catch (Throwable t) {
+            if (sideSave != null) {
+                try {
+                    sideSave.close();
+                } catch (Throwable ignored) {
+                }
+            }
             HubSuite.logger().error("子服 '{}' 的侧维度 '{}' 创建失败", config.id, entryId, t);
             return null;
         }
@@ -663,26 +678,19 @@ public final class SubServer implements PlayableWorld {
     private ResourceKey<Level> createVanillaSideDimension(String suffix, String label,
                                                           boolean nether, long seed) {
         String saveName = "hubsuite_" + config.id + "_" + suffix;
+        IsolatedSave sideSave = null;
         try {
             LevelStem stem = WorldFactory.vanillaStem(server, nether);
             if (stem == null) {
                 return null;   // 构造失败，WorldFactory 已经打过日志
             }
-            IsolatedSave sideSave = IsolatedSave.open(server, saveName,
+            sideSave = IsolatedSave.open(server, saveName,
                     config.displayName + " §7" + label, GameType.SURVIVAL,
                     Difficulty.NORMAL, false);
             ResourceKey<Level> dimension = WorldBuilder.dimensionKey(config.id + "_" + suffix);
             ServerLevel level = WorldBuilder.create(server, sideSave, dimension, stem, seed, true);
             level.getWorldBorder().setAbsoluteMaxSize(server.getAbsoluteMaxWorldSize());
 
-            /*
-             * 出生点：交给原版算。
-             *
-             * 下界出生点原版是拿主世界出生点 /8 得出来的，我们的下界和子服主维度
-             * 同样是 1:8 关系，所以直接按同一个坐标换算即可。
-             * 末地则固定落在 (100, 50, 0) 的黑曜石平台上 —— 原版
-             * ServerLevel 构造时就会铺那块平台，这里只要把重生点指过去。
-             */
             int sx = (int) Math.floor(primary.spawn().x() / 8.0);
             int sz = (int) Math.floor(primary.spawn().z() / 8.0);
             int sy = nether ? 64 : 50;
@@ -696,22 +704,18 @@ public final class SubServer implements PlayableWorld {
             applyWorldBorder(level, rules, sideSpawn);
 
             sideSave.register(level);
-            /*
-             * 必须把**玩家数据**也绑到这个存档上，和主维度、岛屿维度一样。
-             *
-             * 漏掉这一步的后果（用户实测："从创造服地狱退出游戏再重进，
-             * 背包被带进了大厅"）：PlayerDataRouter 里没有这个维度 →
-             * 玩家在下界里时 resolveFor() 回落到兜底存档（= 大厅），
-             * 于是**下界里保存的背包被写进了大厅的玩家数据文件**，
-             * 下次登录（读的正是大厅那份）就把下界那身东西带进了大厅；
-             * 而 hubsuite_<子服>_nether/players/data 一直是空的（实测）。
-             * 末地同理。
-             */
-            sideSave.bindPlayerStorage(dimension);
+            // 侧维度与所属主维度共享玩家存储，保证进出传送门后背包/经验/末影箱一致
+            primary.save().bindPlayerStorage(dimension);
             RulesManager.register(dimension, rules);
             entries.put(suffix, new Entry(suffix, dimension, level, sideSave, sideSpawn, label));
             return dimension;
         } catch (Throwable t) {
+            if (sideSave != null) {
+                try {
+                    sideSave.close();
+                } catch (Throwable ignored) {
+                }
+            }
             HubSuite.logger().error("子服 '{}' 的{}维度创建失败，将退回原版共用维度",
                     config.id, label, t);
             return null;
@@ -1190,6 +1194,11 @@ public final class SubServer implements PlayableWorld {
     }
 
     public void close() {
+        ALL.remove(this);
+        pendingSpawnFixes.removeIf(p -> p.server() == server && entries.values().stream()
+                .anyMatch(e -> e.level() == p.level()));
+        pendingPlatforms.removeIf(p -> entries.values().stream()
+                .anyMatch(e -> e.level() == p.level()));
         for (Entry entry : entries.values()) {
             RulesManager.unregister(entry.dimension());
             ServerLevelsAccess.remove(server, entry.dimension());

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " G ",
+    "SSS",
+    " S "
+  ],
+  "key": {
+    "G": "minecraft:glowstone_dust",
+    "S": "minecraft:stone_bricks"
+  },
+  "result": {
+    "id": "hubsuite:moon_altar",
+    "count": 1
+  }
+}

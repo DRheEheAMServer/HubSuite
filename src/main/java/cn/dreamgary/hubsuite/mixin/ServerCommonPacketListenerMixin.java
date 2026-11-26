@@ -25,7 +25,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerCommonPacketListenerImpl.class)
 public abstract class ServerCommonPacketListenerMixin implements ServerCommonPacketListener {
 
-    @Inject(method = "handleCustomClickAction", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "handleCustomClickAction",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/network/PacketProcessor;)V",
+                    shift = At.Shift.AFTER),
+            cancellable = true)
     private void hubsuite$routeDialogAction(ServerboundCustomClickActionPacket packet, CallbackInfo ci) {
         try {
             if (DialogRouter.route(this, packet)) {

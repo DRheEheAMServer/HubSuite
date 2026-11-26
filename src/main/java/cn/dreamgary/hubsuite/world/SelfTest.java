@@ -180,18 +180,259 @@ public final class SelfTest {
         step("钓竿数据契约（部件表 + 属性公式 + NBT 线格式）", this::checkRodDataContract);
         step("客户端真物品（共用定义 / 原型一致 / 素材齐全 / 能力名）", this::checkClientItemDefs);
         step("装配台规则（修补 / 换底 / 换线 / 换钩 / 拒绝）", this::checkAssemblyRules);
+        step("装配台交互（放料进格不消耗 / 点装配按钮才生效 / 放错部位被拒 —— 用户实测两回）", this::checkAssemblyInteraction);
+        step("通用容器界面（布局 ↔ 真实槽位一致 / 菜单能查到布局）", this::checkUiLayout);
+        step("钓竿物品提示（总体数值 / Shift 部件明细 / 坏竿提示）", this::checkRodTooltip);
         step("装配台方块（注册 / 方块实体 / 素材 / 掉落表）", this::checkAssemblyBlock);
         step("钓竿耐久与断线（扣耐久 / 断线边界 / 原版耐久条 / 坏了不能钓）", this::checkRodDurability);
+        step("耐烧灼规则（岩浆里不耐烧灼 → 断线 ×10）", this::checkHeatProof);
         step("铁砧升级（单槽替换 / 累计惩罚 / 不归我们管的一律原样）", this::checkRodAnvil);
         step("青金石附魔（附魔台等价 / 宝藏池排除诅咒 / 概率边界）", this::checkRodEnchanting);
         step("旧熔岩钓竿换算（钩决定岩浆 / 磨损比例照搬 / 配方已删）", this::checkLegacyLavaRod);
+        step("原版耐久扣减不碰我们的竿（否则会在坏掉那一刻被销毁）", this::checkRodDurabilityShield);
+        step("虚月律魔法系统（月相 / 侵蚀 / 镶嵌 / 碎宝石 / 祭坛配方 / 资源）", this::checkMagicSystem);
+        step("虚月律方块名称、创造栏与祭坛交互回归", this::checkMagicAndItemsRegression);
+        step("海岛奇鱼、图鉴、海域事件与蟹笼回归", this::checkOceanExpansion);
+    }
+
+    private void checkOceanExpansion() {
+        var bad = new java.util.ArrayList<String>();
+        for (var id : cn.dreamgary.hubsuite.ocean.OceanFishDefs.ALL_ITEM_IDS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) {
+                bad.add("缺海岛物品:" + id);
+            }
+            String modelPath = "/assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json";
+            if (SelfTest.class.getResource(modelPath) == null) {
+                bad.add("缺海岛模型:" + modelPath);
+            }
+        }
+        var trapItem = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getValue(cn.dreamgary.hubsuite.ocean.OceanBlockIds.FISH_TRAP);
+        if (!"block.hubsuite.fish_trap".equals(trapItem.getDescriptionId())) {
+            bad.add("蟹笼名键错误:" + trapItem.getDescriptionId());
+        }
+        var oceanKey = net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_ocean"));
+        cn.dreamgary.hubsuite.ocean.OceanEventManager.startEvent(
+                cn.dreamgary.hubsuite.ocean.OceanEventManager.EventType.BIOLUM_NIGHT, null);
+        if (cn.dreamgary.hubsuite.ocean.OceanEventManager.bonusLuck(oceanKey) != 4) {
+            bad.add("荧光夜潮幸运加成应为 4");
+        }
+        cn.dreamgary.hubsuite.ocean.OceanEventManager.stopEvent();
+        if (cn.dreamgary.hubsuite.ocean.OceanEventManager.activeEvent() != null) {
+            bad.add("stopEvent 后事件仍存在");
+        }
+        var oceanLevel = server.getLevel(oceanKey);
+        if (oceanLevel != null) {
+            var pos = new net.minecraft.core.BlockPos(0, 70, 0);
+            var hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                    net.minecraft.core.Direction.UP, pos, false);
+            var res = cn.dreamgary.hubsuite.ocean.OceanRegistry.FISH_TRAP.defaultBlockState()
+                    .useItemOn(new ItemStack(Items.COD), oceanLevel, null,
+                            net.minecraft.world.InteractionHand.OFF_HAND, hit);
+            if (res != net.minecraft.world.InteractionResult.PASS) {
+                bad.add("蟹笼 OFF_HAND 未返回 PASS: " + res);
+            }
+        }
+        if (bad.isEmpty()) {
+            ok("海岛扩展校验通过（9 奇鱼 + 3 料理 + 蟹笼 + 海域事件 + OFF_HAND 防护）");
+        } else {
+            fail("海岛扩展回归失败：" + String.join("; ", bad));
+        }
+    }
+
+    private void checkMagicAndItemsRegression() {
+        var bad = new java.util.ArrayList<String>();
+        // 1. 方块物品描述键必须走 block.hubsuite.*（不能被 MC 26.1 覆盖成 item.hubsuite.*）
+        var blockIds = new java.util.ArrayList<>(cn.dreamgary.hubsuite.magic.MagicIds.ALL_BLOCKS);
+        blockIds.add(cn.dreamgary.hubsuite.rod.AssemblyTableIds.ID);
+        for (var id : blockIds) {
+            var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(id);
+            String expected = "block.hubsuite." + id.getPath();
+            String actual = item.getDescriptionId();
+            if (!expected.equals(actual)) {
+                bad.add("方块名键错误 " + id + ": " + actual + " != " + expected);
+            }
+        }
+        // 2. 创造模式标签页与全量 8 种钓饵 + 魔法物品均已注册
+        if (!net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB
+                .containsKey(cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.MAIN.identifier())) {
+            bad.add("缺少创造模式标签页 " + cn.dreamgary.hubsuite.item.HubSuiteCreativeTabs.MAIN.identifier());
+        }
+        for (var def : cn.dreamgary.hubsuite.item.HubSuiteItemDefs.ALL) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(def.id())) {
+                bad.add("缺少定义物品:" + def.id());
+            }
+        }
+        // 3. 祭坛/基座/催生仪对 OFF_HAND 必须返回 PASS（防止主手放上去后副手立刻取回）
+        var classic = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_classic")));
+        if (classic != null) {
+            var pos = new net.minecraft.core.BlockPos(0, 100, 0);
+            var hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(pos),
+                    net.minecraft.core.Direction.UP, pos, false);
+            var blocks = java.util.List.of(
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_VOID_ALTAR,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_ALTAR,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.MAGIC_PEDESTAL,
+                    cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_BLOOM_TOTEM);
+            for (var block : blocks) {
+                var res = block.defaultBlockState().useItemOn(
+                        new ItemStack(Items.AMETHYST_SHARD), classic, null,
+                        net.minecraft.world.InteractionHand.OFF_HAND, hit);
+                if (res != net.minecraft.world.InteractionResult.PASS) {
+                    bad.add("OFF_HAND 未返回 PASS: " + block + " -> " + res);
+                }
+            }
+            // 4. 容器清空再替换不得爆出掉落物（防建岛补铺/清理时箱子炸物资）
+            var testPos = new net.minecraft.core.BlockPos(0, 120, 0);
+            var oldState = classic.getBlockState(testPos);
+            classic.setBlockAndUpdate(testPos, net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());
+            if (classic.getBlockEntity(testPos) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity chest) {
+                chest.setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+                chest.clearContent();
+            }
+            classic.setBlockAndUpdate(testPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            var drops = classic.getEntitiesOfClass(
+                    net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(testPos).inflate(1.5));
+            if (!drops.isEmpty()) {
+                bad.add("清空容器后仍爆出掉落物: " + drops.size());
+                drops.forEach(net.minecraft.world.entity.Entity::discard);
+            }
+            if (!oldState.isAir()) {
+                classic.setBlockAndUpdate(testPos, oldState);
+            }
+        }
+        // 5. 海岛岩浆海下界：液面 Y=63、关闭含水层（开阔岩浆海且无顶层基岩）
+        var oceanNether = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION,
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("hubsuite", "skyblock_ocean_nether")));
+        if (oceanNether != null
+                && oceanNether.getChunkSource().getGenerator() instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator ncg) {
+            var s = ncg.generatorSettings().value();
+            if (s.seaLevel() != LavaSeaGenerator.LAVA_SEA_LEVEL || s.aquifersEnabled()) {
+                bad.add("岩浆海下界设置异常: seaLevel=" + s.seaLevel() + ", aquifers=" + s.aquifersEnabled());
+            }
+        }
+        if (bad.isEmpty()) {
+            ok("方块名键(6)、创造栏与全量物品注册、祭坛副手防弹回校验通过");
+        } else {
+            fail("虚月律/物品回归失败：" + String.join("; ", bad));
+        }
+    }
+
+    private void checkMagicSystem() {
+        var bad = new java.util.ArrayList<String>();
+        // 1. 注册表 + 不可破坏属性
+        for (var id : cn.dreamgary.hubsuite.magic.MagicIds.ALL_BLOCKS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id)) {
+                bad.add("缺方块:" + id);
+            }
+            if (!net.minecraft.core.registries.BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
+                bad.add("缺方块实体:" + id);
+            }
+        }
+        for (var id : cn.dreamgary.hubsuite.magic.MagicIds.ALL_ITEMS) {
+            if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) {
+                bad.add("缺物品:" + id);
+            }
+            String modelPath = "/assets/" + id.getNamespace() + "/models/item/" + id.getPath() + ".json";
+            if (SelfTest.class.getResource(modelPath) == null) {
+                bad.add("缺模型:" + modelPath);
+            }
+        }
+        if (cn.dreamgary.hubsuite.magic.MagicRegistry.VOID_CRYSTAL.defaultDestroyTime() >= 0.0F) {
+            bad.add("蚀空凝晶必须不可破坏(destroyTime<0)");
+        }
+        // 2. 月相公式
+        if (cn.dreamgary.hubsuite.magic.MoonPhaseMath.moonFactor(1.0F) != 1.00
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.voidFactor(0.0F) != 1.00
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.moonFactor(0.5F) != 0.50
+                || cn.dreamgary.hubsuite.magic.MoonPhaseMath.voidFactor(0.5F) != 0.50) {
+            bad.add("月相双能系数有误");
+        }
+        // 3. 虚空侵蚀高度与硬度单调递增
+        if (cn.dreamgary.hubsuite.magic.VoidErosionRules.MAX_EROSION_Y != -48) {
+            bad.add("MAX_EROSION_Y应为-48");
+        }
+        int pDirt = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(0.5F);
+        int pCobble = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(2.0F);
+        int pObs = cn.dreamgary.hubsuite.magic.VoidErosionRules.requiredProgress(50.0F);
+        int vCobble = cn.dreamgary.hubsuite.magic.VoidErosionRules.storedVoid(2.0F);
+        int vObs = cn.dreamgary.hubsuite.magic.VoidErosionRules.storedVoid(50.0F);
+        if (!(pDirt < pCobble && pCobble < pObs && vCobble < vObs)) {
+            bad.add("硬度侵蚀曲线未随硬度递增");
+        }
+        // 4. 法器镶嵌与碎宝石不碎法杖（含裸物品默认组件 + MagicSocketing）
+        var rawCrystal = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_CRYSTAL);
+        var rawCrystalData = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(rawCrystal);
+        if (rawCrystalData == null || !rawCrystalData.isMoonGem()) {
+            bad.add("裸月能结晶应具备默认月光组件");
+        } else {
+            rawCrystalData.withMoon(320).writeTo(rawCrystal);
+        }
+        var staff = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOONWING_STAFF);
+        boolean socketOk = cn.dreamgary.hubsuite.magic.MagicSocketing.trySocket(
+                staff, rawCrystal, cn.dreamgary.hubsuite.magic.MagicIds.MOON_CRYSTAL,
+                cn.dreamgary.hubsuite.magic.MagicEnergyData.GEM_MOON, null, false);
+        var readBack = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(staff);
+        if (!socketOk || !rawCrystal.isEmpty() || readBack == null || !readBack.isMoonGem() || readBack.moon() != 320) {
+            bad.add("法器镶嵌读写失败");
+        } else {
+            readBack.shatterGem().writeTo(staff);
+            var afterShatter = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(staff);
+            if (afterShatter == null || afterShatter.hasGem() || staff.isEmpty()) {
+                bad.add("碎宝石后应保留空槽法器本体");
+            }
+        }
+        // 5. 祭坛配方匹配（含生态转化与拨月仪式）
+        var rStaff = cn.dreamgary.hubsuite.magic.MagicRecipes.match(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STICK),
+                java.util.List.of(
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FEATHER),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FEATHER),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.PHANTOM_MEMBRANE),
+                        new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.MOON_CRYSTAL)));
+        var rPhase = cn.dreamgary.hubsuite.magic.MagicRecipes.match(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GLOWSTONE),
+                java.util.List.of(
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOLD_INGOT),
+                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.LAPIS_LAZULI)));
+        if (rStaff == null || !"moonwing_staff".equals(rStaff.id())
+                || rPhase == null || !rPhase.isPhaseShift() || rPhase.targetMoonPhase() != 0) {
+            bad.add("祭坛配方匹配失败");
+        }
+        // 6. 炽月晶与 Curios 风格饰品槽校验
+        var blazing = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.BLAZING_MOON_CRYSTAL);
+        var blazingData = cn.dreamgary.hubsuite.magic.MagicEnergyData.of(blazing);
+        if (blazingData == null || !blazingData.isBlazingMoon()
+                || blazingData.maxMoon() != cn.dreamgary.hubsuite.magic.MagicEnergyData.BLAZING_CAPACITY) {
+            bad.add("炽月晶默认组件校验失败");
+        }
+        var bracer = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.VOID_BRACER);
+        var anklet = new net.minecraft.world.item.ItemStack(cn.dreamgary.hubsuite.magic.MagicRegistry.LUNAR_ANKLET);
+        if (!cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.WRIST, bracer)
+                || cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.RING_1, bracer)
+                || !cn.dreamgary.hubsuite.trinket.TrinketDefs.accepts(cn.dreamgary.hubsuite.trinket.TrinketSlotType.RING_1, anklet)) {
+            bad.add("饰品槽位类型校验失败");
+        }
+        if (bad.isEmpty()) {
+            ok("虚月律魔法系统校验通过（5 方块 / 16 物品 / 月相 / Y<=-48 / 炽月晶 / 饰品槽 / 祭坛仪式）");
+        } else {
+            fail("虚月律魔法系统失败：" + String.join("；", bad));
+        }
     }
 
 
     /**
      * 自定义物品 + 岩浆渔获 + 配方。
      *
-     * <p>锁三件事：Polymer 物品注册上了、岩浆表按群系分化了、配方真的加载了
+     * <p>锁三件事：自定义物品注册上了、岩浆表按群系分化了、配方真的加载了
      * （JSON 写错不会崩，只会静默没有这条配方 —— 必须主动查）。
      */
     private void checkCustomItemsAndFishing() {
@@ -215,7 +456,7 @@ public final class SelfTest {
                 fail("这些自定义物品没注册上：" + missing.toString().trim());
                 return;
             }
-            ok(items.size() + " 个自定义物品都注册上了（客户端显示由 Polymer 负责）");
+            ok(items.size() + " 个自定义物品都注册上了（0.6 收尾起 Polymer 已下线，客户端强制安装直接发真物品）");
 
             /*
              * 钓饵判定现在是**数据驱动**的（v0.4.0-alpha.7 起自带的钓饵全部移除）：
@@ -255,7 +496,7 @@ public final class SelfTest {
             // 岩浆渔获表（按群系分化）
             var config = HubSuite.fishing();
             int totalBiomeEntries = 0;
-            for (String dim : new String[]{"hubsuite:skyblock_ocean_nether", "hubsuite:skyblock_classic_nether"}) {
+            for (String dim : new String[]{"hubsuite:skyblock_ocean_nether"}) {
                 var key = net.minecraft.resources.ResourceKey.create(
                         net.minecraft.core.registries.Registries.DIMENSION,
                         net.minecraft.resources.Identifier.parse(dim));
@@ -272,11 +513,19 @@ public final class SelfTest {
                     }
                 }
             }
+            // 钓鱼只属于海岛服：空岛服（经典空岛）的下界不该挂渔获表
+            var classicNetherKey = net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.DIMENSION,
+                    net.minecraft.resources.Identifier.parse("hubsuite:skyblock_classic_nether"));
+            if (cn.dreamgary.hubsuite.feature.FishingLoot.tableFor(config, classicNetherKey) != null) {
+                fail("空岛服（经典空岛）不该有岩浆渔获表：钓鱼只属于海岛服");
+                return;
+            }
             if (totalBiomeEntries < 5) {
                 fail("岩浆渔获表没有按群系分化（带群系的条目只有 " + totalBiomeEntries + " 条）");
                 return;
             }
-            ok("岩浆渔获表就绪（两个海岛下界，按群系分化的条目 " + totalBiomeEntries + " 条）");
+            ok("岩浆渔获表就绪（海岛下界，按群系分化的条目 " + totalBiomeEntries + " 条；空岛服不挂表）");
 
             // 配方真的加载了（JSON 写错是静默失败）
             String[] recipes = {"nether_string",
@@ -316,14 +565,6 @@ public final class SelfTest {
                     "配方解锁 advancement 齐全（" + recipes.length + " 条，配方书里能看到）",
                     "这些配方没有 advancement，玩家在配方书里看不到：" + missingAdv.toString().trim());
 
-            // Polymer 硬依赖：自定义物品必须实现 PolymerItem，原版客户端才认这个 id
-            boolean polymerOk = true;
-            for (var item : items.values()) {
-                polymerOk &= item instanceof eu.pb4.polymer.core.api.item.PolymerItem;
-            }
-            okOrFail(polymerOk,
-                    "自定义物品全部实现了 PolymerItem（原版客户端可识别）",
-                    "有自定义物品没实现 PolymerItem —— 客户端不会认这个物品 id");
 
             // 客户端资源包格式号（服主做自定义外观的资源包时要用）
             try {
@@ -896,9 +1137,7 @@ public final class SelfTest {
             // 4) 模型只看"空 / 有饵"：装了**任何**饵（含混装）都是 ..._bait
             var emptyBucket = new net.minecraft.world.item.ItemStack(
                     cn.dreamgary.hubsuite.feature.item.HubSuiteItems.WOODEN_FISHING_BUCKET);
-            var bucketItem = (cn.dreamgary.hubsuite.feature.item.BaitBucketItem)
-                    cn.dreamgary.hubsuite.feature.item.HubSuiteItems.WOODEN_FISHING_BUCKET;
-            String mEmpty = String.valueOf(bucketItem.getPolymerItemModel(emptyBucket, null, null));
+            String mEmpty = String.valueOf(emptyBucket.get(net.minecraft.core.component.DataComponents.ITEM_MODEL));
             if (!"hubsuite:wooden_fishing_bucket".equals(mEmpty)) {
                 fail("空桶模型应为 hubsuite:wooden_fishing_bucket，实际 " + mEmpty);
                 return;
@@ -906,7 +1145,7 @@ public final class SelfTest {
             cn.dreamgary.hubsuite.feature.item.BaitBucketItem.insert(
                     emptyBucket, new net.minecraft.world.item.ItemStack(
                             net.minecraft.world.item.Items.COD, 1), 1);
-            String mBait = String.valueOf(bucketItem.getPolymerItemModel(emptyBucket, null, null));
+            String mBait = String.valueOf(emptyBucket.get(net.minecraft.core.component.DataComponents.ITEM_MODEL));
             if (!"hubsuite:wooden_fishing_bucket_bait".equals(mBait)) {
                 fail("装了普通钓饵的木桶模型应为 ..._bait，实际 " + mBait);
                 return;
@@ -916,7 +1155,7 @@ public final class SelfTest {
             cn.dreamgary.hubsuite.feature.item.BaitBucketItem.insert(
                     netherBucket, new net.minecraft.world.item.ItemStack(
                             net.minecraft.world.item.Items.MAGMA_CREAM, 1), 1);
-            String mNether = String.valueOf(bucketItem.getPolymerItemModel(netherBucket, null, null));
+            String mNether = String.valueOf(netherBucket.get(net.minecraft.core.component.DataComponents.ITEM_MODEL));
             if (!"hubsuite:wooden_fishing_bucket_bait".equals(mNether)) {
                 fail("装了岩浆族饵的木桶模型也应为 ..._bait（不按饵种类分），实际 " + mNether);
                 return;
@@ -929,7 +1168,7 @@ public final class SelfTest {
             cn.dreamgary.hubsuite.feature.item.BaitBucketItem.insert(
                     mixedBucket, new net.minecraft.world.item.ItemStack(
                             net.minecraft.world.item.Items.MAGMA_CREAM, 1), 1);
-            String mMixed = String.valueOf(bucketItem.getPolymerItemModel(mixedBucket, null, null));
+            String mMixed = String.valueOf(mixedBucket.get(net.minecraft.core.component.DataComponents.ITEM_MODEL));
             if (!"hubsuite:wooden_fishing_bucket_bait".equals(mMixed)) {
                 fail("混装的木桶模型也应为 ..._bait，实际 " + mMixed);
                 return;
@@ -1692,12 +1931,47 @@ public final class SelfTest {
             fail("客户端校验判定表有误：" + String.join("；", wrongDecisions));
         }
 
+        /*
+         * 回归（外部审计抓到的漏洞）：合格判定必须看**协议 + 版本**，
+         * 不能只看"有没有收到应答" —— 否则协议/版本不对时 enforce 也不踢人。
+         */
+        var goodInfo = new cn.dreamgary.hubsuite.net.ClientCompat.ClientInfo(
+                "0.5.0-beta.1", cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "fp", java.util.List.of());
+        var badProtocol = new cn.dreamgary.hubsuite.net.ClientCompat.ClientInfo(
+                "0.5.0-beta.1", cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL + 1, "fp", java.util.List.of());
+        var oldVersion = new cn.dreamgary.hubsuite.net.ClientCompat.ClientInfo(
+                "0.0.1", cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "fp", java.util.List.of());
+        List<String> wrongAccept = new ArrayList<>();
+        expectBool(wrongAccept, "合格：协议一致 + 版本够", true,
+                cn.dreamgary.hubsuite.net.ClientCompat.acceptable(goodInfo,
+                        cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "0.5.0-alpha"));
+        expectBool(wrongAccept, "不合格：协议号不一致", false,
+                cn.dreamgary.hubsuite.net.ClientCompat.acceptable(badProtocol,
+                        cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "0.5.0-alpha"));
+        expectBool(wrongAccept, "不合格：版本低于要求", false,
+                cn.dreamgary.hubsuite.net.ClientCompat.acceptable(oldVersion,
+                        cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "0.5.0-alpha"));
+        expectBool(wrongAccept, "不合格：压根没应答", false,
+                cn.dreamgary.hubsuite.net.ClientCompat.acceptable(null,
+                        cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "0.5.0-alpha"));
+        expectBool(wrongAccept, "enforce 下协议不符必须踢", true,
+                cn.dreamgary.hubsuite.net.ClientCompat.decide(cn.dreamgary.hubsuite.net.ClientCompat.Mode.ENFORCE,
+                        cn.dreamgary.hubsuite.net.ClientCompat.acceptable(badProtocol,
+                                cn.dreamgary.hubsuite.net.HandshakePayloads.PROTOCOL, "0.5.0-alpha"))
+                        == cn.dreamgary.hubsuite.net.ClientCompat.Action.KICK);
+        if (wrongAccept.isEmpty()) {
+            ok("客户端合格判定 5 组全对（协议 / 版本 / 无应答都算不合格；enforce 下协议不符会踢）");
+        } else {
+            fail("客户端合格判定有误：" + String.join("；", wrongAccept));
+        }
+
         // --- 6) 假人豁免 + 配置默认值 + 能力名 ---
         var clients = HubSuite.clients();
         if (clients == null) {
             fail("客户端校验没有初始化（HubSuite.clients() 为 null）");
-        } else if (clients.knownCount() != 0 || clients.waitingCount() != 0) {
-            fail("有假人被卷进了客户端校验（已通过 " + clients.knownCount() + " / 等待中 " + clients.waitingCount()
+        } else if (hasFakeInClientCheck(clients)) {
+            fail("有假人被卷进了客户端校验（假人 " + countFakeInClientCheck(clients) + " 个；已通过 "
+                    + clients.knownCount() + " / 等待中 " + clients.waitingCount()
                     + "）—— 假人没有网络连接，必须豁免（否则会被反复发消息甚至断开）");
         } else {
             ok("假人已豁免：自检跑了 20+ 个假人，客户端校验里一个都没进（模式 " + clients.mode() + "）");
@@ -1776,11 +2050,12 @@ public final class SelfTest {
         int lineCount = cn.dreamgary.hubsuite.rod.RodMaterials.lines().size();
         int hookCount = cn.dreamgary.hubsuite.rod.RodMaterials.hooks().size();
         int upgradeCount = cn.dreamgary.hubsuite.rod.RodMaterials.upgrades().size();
-        if (rodCount != 4 || lineCount != 3 || hookCount != 5 || upgradeCount != 4) {
+        // 线 5 档：线 / 地狱线 / 藤蔓 / 垂泪藤 / 缠怨藤（后两种各成一档，数值照抄藤蔓）
+        if (rodCount != 4 || lineCount != 5 || hookCount != 5 || upgradeCount != 4) {
             fail("部件表条目数不对：杆 " + rodCount + " / 线 " + lineCount + " / 钩 " + hookCount
-                    + " / 升级 " + upgradeCount + "（方案里是 4 / 3 / 5 / 4）");
+                    + " / 升级 " + upgradeCount + "（约定是 4 / 5 / 5 / 4）");
         } else {
-            ok("部件表就绪：杆 4 / 线 3 / 钩 5 / 升级 4（默认 "
+            ok("部件表就绪：杆 4 / 线 5（含两种地狱藤蔓）/ 钩 5 / 升级 4（默认 "
                     + cn.dreamgary.hubsuite.rod.RodMaterials.DEFAULT_ROD + " + "
                     + cn.dreamgary.hubsuite.rod.RodMaterials.DEFAULT_LINE + " + "
                     + cn.dreamgary.hubsuite.rod.RodMaterials.DEFAULT_HOOK + "）");
@@ -1827,7 +2102,9 @@ public final class SelfTest {
         expectInt(wrongMath, "幸运（钻石升级，基础 0）", 2000, defaults.withUpgrade("diamond").luckMilli());
         expectInt(wrongMath, "幸运（钻石升级，基础 1000 → (1000+2000)×1.0）", 3000,
                 defaults.withUpgrade("diamond").luckMilli(1000));
-        expectInt(wrongMath, "断线‰（只看线）", 2, defaults.withParts("wood", "vine", "netherite").breakPermille());
+        // 断线的"只看线"要用**不能钓岩浆**的钩来测：能钓岩浆时会叠"耐烧灼"规则（不耐烧灼 ×10）
+        expectInt(wrongMath, "断线‰（只看线；钻石钩不能钓岩浆）", 2,
+                defaults.withParts("wood", "vine", "diamond").breakPermille());
         expectBool(wrongMath, "岩浆可钓（只看钩）", true, defaults.withParts("wood", "vine", "netherite").lavaCapable());
         if (wrongMath.isEmpty()) {
             ok("属性公式 12 组全对（耐久 ×10 / 速度 ×1000 / 幸运 / 断线‰ / 岩浆；青金石负值夹到 1）");
@@ -1843,9 +2120,9 @@ public final class SelfTest {
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchItem(cn.dreamgary.hubsuite.rod.RodMaterials.Part.ROD, "minecraft:netherite_ingot"));
         expectStr(wrongMatch, "地狱丝线 → 线", "nether_string",
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchItem(cn.dreamgary.hubsuite.rod.RodMaterials.Part.LINE, "hubsuite:nether_string"));
-        expectStr(wrongMatch, "垂泪藤 → 线（藤蔓材质）", "vine",
+        expectStr(wrongMatch, "垂泪藤 → 线（自己一档）", "weeping_vines",
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchItem(cn.dreamgary.hubsuite.rod.RodMaterials.Part.LINE, "minecraft:weeping_vines"));
-        expectStr(wrongMatch, "缠怨藤 → 线（藤蔓材质）", "vine",
+        expectStr(wrongMatch, "缠怨藤 → 线（自己一档）", "twisting_vines",
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchItem(cn.dreamgary.hubsuite.rod.RodMaterials.Part.LINE, "minecraft:twisting_vines"));
         expectStr(wrongMatch, "黑曜石 → 钩", "obsidian",
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchItem(cn.dreamgary.hubsuite.rod.RodMaterials.Part.HOOK, "minecraft:obsidian"));
@@ -1857,7 +2134,7 @@ public final class SelfTest {
         expectStr(wrongMatch, "钻石 → 升级物", "diamond",
                 cn.dreamgary.hubsuite.rod.RodMaterials.matchUpgrade(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND)));
         if (wrongMatch.isEmpty()) {
-            ok("物品 → 材质匹配 9 组全对（含藤蔓三别名、同材料按部位区分、非部件返回 null）");
+            ok("物品 → 材质匹配 9 组全对（两种地狱藤蔓各成一档、同材料按部位区分、非部件返回 null）");
         } else {
             fail("物品 → 材质匹配有误：" + String.join("；", wrongMatch));
         }
@@ -2067,19 +2344,16 @@ public final class SelfTest {
             fail("物品素材缺失：" + String.join("；", missing) + " —— 游戏里会显示成紫黑格");
         }
 
-        // --- 4) 每个物品都还实现了 PolymerItem（原版客户端那条路不能断）---
-        List<String> notPolymer = new ArrayList<>();
+        // --- 4) 客户端 / 服务端注册表一致性（Polymer 下线后靠 Fabric 同步对齐，前提就是两端都注册）---
+        int both = 0;
         for (var def : cn.dreamgary.hubsuite.item.HubSuiteItemDefs.ALL) {
-            var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(def.id());
-            if (!(item instanceof eu.pb4.polymer.core.api.item.PolymerItem)) {
-                notPolymer.add(def.path());
+            if (net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(def.id()) != null) {
+                both++;
             }
         }
-        if (notPolymer.isEmpty()) {
-            ok("5 个物品都实现了 PolymerItem：没装客户端的玩家照旧看到原版映射，两条路并存");
-        } else {
-            fail("这些物品不再走 Polymer，原版客户端会看到未知物品：" + String.join("、", notPolymer));
-        }
+        okOrFail(both == cn.dreamgary.hubsuite.item.HubSuiteItemDefs.ALL.size(),
+                "全部 " + both + " 个物品已按共用定义注册（Polymer 已下线，客户端强制安装，注册表同步负责对齐 id）",
+                "有物品没按共用定义注册：" + both + "/" + cn.dreamgary.hubsuite.item.HubSuiteItemDefs.ALL.size());
 
         // --- 5) 渔桶的模型提示：装了饵 → _bait，掏空 → 变回来 ---
         var bucket = new net.minecraft.world.item.ItemStack(
@@ -2193,9 +2467,6 @@ public final class SelfTest {
         if (cn.dreamgary.hubsuite.rod.AssemblyBlockEntities.TYPE == null) {
             wrong.add("方块实体类型没注册");
         }
-        if (block != null && !(block instanceof eu.pb4.polymer.core.api.block.PolymerBlock)) {
-            wrong.add("方块没有实现 PolymerBlock（没装客户端的玩家会看到未知方块）");
-        }
 
         // 素材三件套 + 掉落表（服务端 jar 里查 classpath / 数据包）
         for (String path : List.of(
@@ -2214,7 +2485,7 @@ public final class SelfTest {
         }
 
         if (wrong.isEmpty()) {
-            ok("装配台方块就绪：方块 + 物品 + 方块实体都注册了，实现了 PolymerBlock（原版客户端看锻造台），"
+            ok("装配台方块就绪：方块 + 物品 + 方块实体都注册了（Polymer 已下线，客户端强制安装），"
                     + "模型/贴图/物品定义 5 个素材齐全，配方与掉落表也在");
         } else {
             fail("装配台方块有问题：" + String.join("；", wrong));
@@ -2288,6 +2559,34 @@ public final class SelfTest {
      * 以及**原版累计惩罚**：产物的 REPAIR_COST 记一笔、花费跟着涨。
      * 另外确认"不是我们的组合"一律返回空 —— 原版的合并 / 命名 / 附魔不能被我们吃掉。
      */
+    /*
+     * 客户端校验表里**有几个假人**。
+     *
+     * 注意：不能要求"表里一个人都没有" —— 自检常常在真客户端连着（开发联调）时跑，
+     * 那时 known 里有一个真客户端是完全正常的。这个假设是连了客户端才暴露出来的
+     * （之前一直没人连，所以一直是绿的）。
+     */
+    private int countFakeInClientCheck(cn.dreamgary.hubsuite.net.ClientCompat clients) {
+        int n = 0;
+        for (java.util.UUID id : clients.knownIds()) {
+            if (server.getPlayerList().getPlayer(id)
+                    instanceof cn.dreamgary.hubsuite.fake.MarkedFakePlayer) {
+                n++;
+            }
+        }
+        for (java.util.UUID id : clients.waitingIds()) {
+            if (server.getPlayerList().getPlayer(id)
+                    instanceof cn.dreamgary.hubsuite.fake.MarkedFakePlayer) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private boolean hasFakeInClientCheck(cn.dreamgary.hubsuite.net.ClientCompat clients) {
+        return countFakeInClientCheck(clients) > 0;
+    }
+
     private void checkRodAnvil() {
         List<String> wrong = new ArrayList<>();
         var rod = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FISHING_ROD);
@@ -2320,6 +2619,75 @@ public final class SelfTest {
         var lapisData = cn.dreamgary.hubsuite.rod.RodData.of(lapis.stack());
         expectInt(wrong, "青金石后上限（640 − 1920 → 夹到 1）", 1,
                 lapisData == null ? -1 : lapisData.computedMaxDurability());
+
+        /*
+         * --- 真实铁砧菜单路径 ---
+         *
+         * 用户实测"铁砧升级无效"的根因：AnvilMenu.createResult 里有 **5 个 RETURN**，
+         * 竿 + 钻石这种"原版没有的组合"走**早期返回**；注入点若用 TAIL（只挂最后一个 return）
+         * 就永远执行不到。这里直接建一个真菜单、走原版回调，把这条路径钉住。
+         */
+        // 钓竿系统只限海岛服（用户定的）：用例必须跑在海岛维度，否则按新规则不出结果
+        var oceanLevel = server.getLevel(
+                cn.dreamgary.hubsuite.world.WorldBuilder.dimensionKey("skyblock_ocean"));
+        if (oceanLevel == null) {
+            oceanLevel = server.overworld();
+        }
+        // 作用域断言：海岛生效、空岛与主世界不生效
+        var scopeClassic = server.getLevel(
+                cn.dreamgary.hubsuite.world.WorldBuilder.dimensionKey("skyblock_classic"));
+        expectBool(wrong, "钓竿作用域：海岛服生效",
+                true, cn.dreamgary.hubsuite.rod.RodScope.allowed(oceanLevel));
+        expectBool(wrong, "钓竿作用域：空岛服（经典空岛）不生效",
+                false, cn.dreamgary.hubsuite.rod.RodScope.allowed(scopeClassic));
+        expectBool(wrong, "钓竿作用域：主世界不生效",
+                false, cn.dreamgary.hubsuite.rod.RodScope.allowed(server.overworld()));
+        var anvilProbe = cn.dreamgary.hubsuite.fake.FakePlayers.spawn(server, "hubsuite_anvil",
+                oceanLevel, false);
+        if (anvilProbe != null) {
+            try {
+                var anvil = new net.minecraft.world.inventory.AnvilMenu(2, anvilProbe.getInventory(),
+                        net.minecraft.world.inventory.ContainerLevelAccess.NULL);
+                anvil.getSlot(net.minecraft.world.inventory.AnvilMenu.INPUT_SLOT).set(rod.copy());
+                anvil.getSlot(net.minecraft.world.inventory.AnvilMenu.ADDITIONAL_SLOT)
+                        .set(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND));
+                anvil.slotsChanged(anvil.getSlot(0).container);   // 原版铁砧就是靠包装容器回调它
+                var anvilResult = anvil.getSlot(net.minecraft.world.inventory.AnvilMenu.RESULT_SLOT).getItem();
+                expectBool(wrong, "真实铁砧菜单（海岛服）：竿 + 钻石 出结果", true, !anvilResult.isEmpty());
+
+                // 回归：空岛服（经典空岛）里同一组合**不该**出结果（作用域限制）
+                var outsideLevel = scopeClassic != null ? scopeClassic : server.overworld();
+                var outside = cn.dreamgary.hubsuite.fake.FakePlayers.spawn(server, "hubsuite_anvil_out",
+                        outsideLevel, false);
+                if (outside != null) {
+                    var anvilOut = new net.minecraft.world.inventory.AnvilMenu(3, outside.getInventory(),
+                            net.minecraft.world.inventory.ContainerLevelAccess.NULL);
+                    anvilOut.getSlot(net.minecraft.world.inventory.AnvilMenu.INPUT_SLOT).set(rod.copy());
+                    anvilOut.getSlot(net.minecraft.world.inventory.AnvilMenu.ADDITIONAL_SLOT)
+                            .set(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND));
+                    anvilOut.slotsChanged(anvilOut.getSlot(0).container);
+                    expectBool(wrong, "非海岛服（空岛服）：铁砧不出升级结果", false,
+                            !anvilOut.getSlot(net.minecraft.world.inventory.AnvilMenu.RESULT_SLOT).getItem().isEmpty());
+                }
+                if (!anvilResult.isEmpty()) {
+                    var rd = cn.dreamgary.hubsuite.rod.RodData.of(anvilResult);
+                    expectStr(wrong, "真实铁砧菜单：结果带钻石升级", "diamond",
+                            rd == null ? null : rd.upgrade());
+                }
+            } finally {
+                server.getPlayerList().remove(anvilProbe);
+            }
+        }
+
+        // --- 新竿（还没写过数据）也能升级：用户实测"铁砧升级无效"的根因 ---
+        var fresh = cn.dreamgary.hubsuite.feature.RodAnvil.combine(
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FISHING_ROD),
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.EMERALD));
+        expectBool(wrong, "新竿（无数据）+ 绿宝石 → 算出结果", true, !fresh.isEmpty());
+        if (!fresh.isEmpty()) {
+            var freshData = cn.dreamgary.hubsuite.rod.RodData.of(fresh.stack());
+            expectStr(wrong, "新竿升级槽", "emerald", freshData == null ? null : freshData.upgrade());
+        }
 
         // --- 不归我们管的组合：原版结果原样保留 ---
         var notOurs = cn.dreamgary.hubsuite.feature.RodAnvil.combine(
@@ -2487,6 +2855,311 @@ public final class SelfTest {
                     + "磨损比例照搬 / 满耐久不会被修坏 / 普通钩不能钓岩浆）");
         } else {
             fail("旧熔岩钓竿收尾有误：" + String.join("；", wrong));
+        }
+    }
+
+    /**
+     * 原版耐久扣减**不能**作用在带我们数据的竿上。
+     *
+     * <p>这是复查时抓出来的真 bug：{@code FishingRodItem.use} 收竿的顺序是
+     * {@code retrieve(...)}（我们在里面扣耐久、把耐久条按比例映射到原版条）
+     * → 紧接着 {@code stack.hurtAndBreak(1, ...)}。映射会把「已坏」的竿放在
+     * {@code MAX_DAMAGE - 1}，原版这最后一下 +1 正好打满 → **物品被销毁**，
+     * 跟方案「耐久归零只是不能钓、物品不消失」矛盾。
+     *
+     * <p>这里同时锁「我们的竿不受原版扣耐久」和「普通原版钓竿照旧扣」（后者是
+     * AGENT.md 的硬规矩：原版行为不能改坏）。
+     */
+    private void checkRodDurabilityShield() {
+        List<String> wrong = new ArrayList<>();
+        var probe = cn.dreamgary.hubsuite.fake.FakePlayers.spawn(server, "hubsuite_durshield",
+                server.overworld(), false);
+
+        // 我们的竿：原版这一下必须无效
+        var ours = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FISHING_ROD);
+        var data = new cn.dreamgary.hubsuite.rod.RodData("wood", "string", "string", "", 0, 640);
+        data.writeTo(ours);
+        data.applyVanillaBar(ours);
+        Integer before = ours.get(net.minecraft.core.component.DataComponents.DAMAGE);
+        ours.hurtAndBreak(1, probe, net.minecraft.world.entity.EquipmentSlot.MAINHAND);
+        Integer after = ours.get(net.minecraft.core.component.DataComponents.DAMAGE);
+        expectInt(wrong, "带数据的竿被原版扣耐久后，耐久条不动",
+                before == null ? 0 : before, after == null ? 0 : after);
+        expectBool(wrong, "带数据的竿不会消失（数量还是 1）", true, ours.getCount() == 1);
+        if (cn.dreamgary.hubsuite.rod.RodData.of(ours) == null) {
+            wrong.add("耐久被扣之后数据没了");
+        }
+
+        // 普通原版钓竿：原版扣耐久照旧（不能把原版行为改坏）
+        var vanilla = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FISHING_ROD);
+        vanilla.hurtAndBreak(1, probe, net.minecraft.world.entity.EquipmentSlot.MAINHAND);
+        Integer vanillaDamage = vanilla.get(net.minecraft.core.component.DataComponents.DAMAGE);
+        expectInt(wrong, "普通原版钓竿照旧扣 1 点原版耐久", 1,
+                vanillaDamage == null ? 0 : vanillaDamage);
+
+        if (wrong.isEmpty()) {
+            ok("耐久护盾 3 组全对（带数据的竿不被原版扣耐久 / 不会被原版销毁 / 普通原版钓竿照旧）");
+        } else {
+            fail("耐久护盾有误：" + String.join("；", wrong));
+        }
+    }
+
+    /**
+     * 装配台的**真实交互链路**（两次用户实测的回归：26.1"换不了配件" + "放料就该立刻打上去"改按钮流）。
+     *
+     * <p>不复用纯函数（{@link #checkAssemblyRules} 已覆盖规则），这里模拟客户端点击：
+     * {@code menu.clicked(...)} 就是玩家点击走的服务端路径。
+     * <b>现行规则（用户定的）</b>：材料进格只是暂存（不消耗），面板出活预览，
+     * 点「装配」按钮（{@code applyFromButton}）才消耗生效。
+     */
+    private void checkAssemblyInteraction() {
+        List<String> wrong = new ArrayList<>();
+        var probe = cn.dreamgary.hubsuite.fake.FakePlayers.spawn(server, "hubsuite_asmclick",
+                server.overworld(), false);
+        var menu = new cn.dreamgary.hubsuite.rod.AssemblyMenu(1, probe.getInventory(),
+                new net.minecraft.world.SimpleContainer(cn.dreamgary.hubsuite.rod.AssemblyBlockEntity.SIZE));
+        int rodSlot = cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_ROD;
+        int lineSlot = cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_LINE;
+        int hookSlot = cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_HOOK;
+        var PICKUP = net.minecraft.world.inventory.ContainerInput.PICKUP;
+
+        // 1) 空手点竿位 → 上竿
+        menu.setCarried(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.FISHING_ROD));
+        menu.clicked(rodSlot, 0, PICKUP, probe);
+        expectBool(wrong, "竿已放进竿位", true, !menu.getSlot(rodSlot).getItem().isEmpty());
+
+        // 2) **右键**点钩位（原版右键 = 放一个）：材料只在格里**暂存**，成品格出现结果
+        menu.setCarried(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.OBSIDIAN, 2));
+        menu.clicked(hookSlot, 1, PICKUP, probe);
+        expectInt(wrong, "光标剩 1", 1, menu.getCarried().getCount());
+        expectInt(wrong, "材料暂存在钩位（未消耗）", 1, menu.getSlot(hookSlot).getItem().getCount());
+        var pending = menu.getSlot(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT).getItem();
+        expectBool(wrong, "成品格出现结果", true, !pending.isEmpty());
+        expectStr(wrong, "成品 = 钩换黑曜石", "obsidian",
+                pending.isEmpty() ? null : cn.dreamgary.hubsuite.rod.RodData.of(pending).hook());
+
+        // 3) 从成品格取走 → 竿 + 真正起作用的材料各扣 1 个
+        menu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
+        menu.clicked(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT, 0, PICKUP, probe);
+        var taken = menu.getCarried();
+        expectStr(wrong, "取到的成品带黑曜石钩", "obsidian",
+                taken.isEmpty() ? null : cn.dreamgary.hubsuite.rod.RodData.of(taken).hook());
+        expectBool(wrong, "竿位已空（竿变成成品被取走）", true, menu.getSlot(rodSlot).getItem().isEmpty());
+        expectBool(wrong, "钩位已空（消耗 1 个）", true, menu.getSlot(hookSlot).getItem().isEmpty());
+        expectBool(wrong, "成品格已清空", true,
+                menu.getSlot(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT).getItem().isEmpty());
+
+        // 4) 材料**取回**就不该消耗：放回竿 → 藤蔓进线位 → 再取回藤蔓
+        menu.clicked(rodSlot, 0, PICKUP, probe);      // 把成品竿放回竿位
+        expectBool(wrong, "成品竿已放回竿位", true, !menu.getSlot(rodSlot).getItem().isEmpty());
+        menu.setCarried(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.VINE));
+        menu.clicked(lineSlot, 1, PICKUP, probe);
+        expectBool(wrong, "换线成品已出现", true,
+                !menu.getSlot(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT).getItem().isEmpty());
+        menu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
+        menu.clicked(lineSlot, 0, PICKUP, probe);
+        expectInt(wrong, "藤蔓取回到光标", 1, menu.getCarried().getCount());
+        expectBool(wrong, "取回后成品格清空", true,
+                menu.getSlot(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT).getItem().isEmpty());
+
+        // 5) 黑曜石点线位 → 放错部位，整颗留在光标上
+        menu.setCarried(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.OBSIDIAN));
+        menu.clicked(lineSlot, 0, PICKUP, probe);
+        expectBool(wrong, "放错部位 → 留在光标上", true,
+                menu.getCarried().is(net.minecraft.world.item.Items.OBSIDIAN));
+        expectBool(wrong, "放错部位 → 线位仍空", true, menu.getSlot(lineSlot).getItem().isEmpty());
+
+        // 6) 藤蔓进线位 → 成品格出"藤蔓线"，取走后线真的换了
+        menu.setCarried(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.VINE));
+        menu.clicked(lineSlot, 1, PICKUP, probe);
+        menu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
+        menu.clicked(cn.dreamgary.hubsuite.rod.AssemblyMenu.SLOT_RESULT, 0, PICKUP, probe);
+        var finalRod = menu.getCarried();
+        expectStr(wrong, "取走的成品线 = 藤蔓", "vine",
+                finalRod.isEmpty() ? null : cn.dreamgary.hubsuite.rod.RodData.of(finalRod).line());
+
+        if (wrong.isEmpty()) {
+            ok("装配台交互全对（上竿 / 材料暂存不消耗 / 成品格出结果 / 取走消耗 1 个 / "
+                    + "材料可取回 / 放错部位被拒 / 换线生效）");
+        } else {
+            fail("装配台交互有误：" + String.join("；", wrong));
+        }
+    }
+
+    /**
+     * 通用容器界面（客户端契约第 8 节）。
+     *
+     * <p>锁住那条"想错位都难"的不变量：**画框的坐标与菜单真实槽位来自同一份布局**。
+     * 再确认菜单类型 id 能查到布局 —— 那是客户端通用渲染的前提。
+     */
+    private void checkUiLayout() {
+        List<String> wrong = new ArrayList<>();
+        var layout = cn.dreamgary.hubsuite.ui.UiLayouts.ASSEMBLY;
+        var probe = cn.dreamgary.hubsuite.fake.FakePlayers.spawn(server, "hubsuite_uilayout",
+                server.overworld(), false);
+        var menu = new cn.dreamgary.hubsuite.rod.AssemblyMenu(1, probe.getInventory(),
+                new net.minecraft.world.SimpleContainer(cn.dreamgary.hubsuite.rod.AssemblyBlockEntity.SIZE));
+
+        for (int i = 0; i < layout.frames().size(); i++) {
+            expectInt(wrong, "布局第 " + i + " 格的槽位序号", i, layout.frame(i).slotIndex());
+            expectInt(wrong, "布局第 " + i + " 格 x 与真实槽位一致", layout.frame(i).x(), menu.getSlot(i).x);
+            expectInt(wrong, "布局第 " + i + " 格 y 与真实槽位一致", layout.frame(i).y(), menu.getSlot(i).y);
+        }
+        expectBool(wrong, "装配台菜单能查到布局（客户端通用渲染的前提）", true,
+                cn.dreamgary.hubsuite.ui.UiLayouts.forMenu(cn.dreamgary.hubsuite.rod.AssemblyMenu.ID) == layout);
+        expectBool(wrong, "没登记的菜单查不到布局（交回原版）", false,
+                cn.dreamgary.hubsuite.ui.UiLayouts.forMenu(
+                        net.minecraft.resources.Identifier.fromNamespaceAndPath("minecraft", "crafting")) != null);
+        for (var one : cn.dreamgary.hubsuite.ui.UiLayouts.all()) {
+            if (one.frames().isEmpty() || one.width() <= 0 || one.height() <= 0) {
+                wrong.add("布局 " + one.id() + " 不完整");
+            }
+        }
+
+        if (wrong.isEmpty()) {
+            ok("通用界面 15 组全对（布局与真实槽位逐格一致 / 菜单可查布局 / 未登记的菜单交回原版）");
+        } else {
+            fail("通用界面有误：" + String.join("；", wrong));
+        }
+    }
+
+    /**
+     * 钓竿物品提示（用户要的"平时看总体、Shift 看部件"）。
+     *
+     * <p>文本在共用层（{@link cn.dreamgary.hubsuite.rod.RodTooltip}），所以能直接断言，
+     * 不用去截图看 tooltip。
+     */
+    private void checkRodTooltip() {
+        List<String> wrong = new ArrayList<>();
+        var plain = cn.dreamgary.hubsuite.rod.RodData.defaults();   // 木杆 + 线 + 线钩
+        var full = new cn.dreamgary.hubsuite.rod.RodData("iron", "nether_string", "obsidian", "diamond", 320, 3840);
+
+        // --- 总体：耐久 / 速度 / 幸运 / 断线 ---
+        String sum = join(cn.dreamgary.hubsuite.rod.RodTooltip.summary(full));
+        expectBool(wrong, "总体里有耐久", true, sum.contains("耐久"));
+        expectBool(wrong, "总体里有速度", true, sum.contains("速度"));
+        expectBool(wrong, "总体里有幸运", true, sum.contains("幸运"));
+        expectBool(wrong, "总体里有断线（地狱线 0.7%）", true, sum.contains("0.7%"));
+        expectBool(wrong, "黑曜石钩 → 收起也标明耐高温", true, sum.contains("耐高温"));
+
+        String plainSum = join(cn.dreamgary.hubsuite.rod.RodTooltip.summary(plain));
+        expectBool(wrong, "线钩 → 收起不写耐高温", false, plainSum.contains("耐高温"));
+
+        // --- 坏竿：总体要提示回装配台修 ---
+        var broken = new cn.dreamgary.hubsuite.rod.RodData("iron", "string", "string", "diamond", 0, 3840);
+        expectBool(wrong, "坏竿总体提示已损坏", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.summary(broken)).contains("已损坏"));
+
+        // --- 明细：四条（杆 / 线 / 钩 / 升级），带各自的数值与中文名 ---
+        String det = join(cn.dreamgary.hubsuite.rod.RodTooltip.details(full));
+        String detAll = join(cn.dreamgary.hubsuite.rod.RodTooltip.details(full));
+        for (String part : List.of("杆", "线", "钩", "升级")) {
+            expectBool(wrong, "明细里有「" + part + "」这一段", true, detAll.contains(part));
+        }
+        expectBool(wrong, "明细里属性是「属性: 值」格式", true,
+                detAll.contains("基础耐久:") && detAll.contains("断线:") && detAll.contains("速度:"));
+        expectBool(wrong, "明细含铁杆", true, det.contains("铁杆"));
+        expectBool(wrong, "明细含地狱线", true, det.contains("地狱线"));
+        expectBool(wrong, "明细含黑曜石钩", true, det.contains("黑曜石钩"));
+        expectBool(wrong, "明细含钻石升级", true, det.contains("钻石"));
+        expectBool(wrong, "明细里钩那段标耐高温", true, det.contains("耐高温"));
+
+        // --- 青金石升级要标出"附魔档 15→30" ---
+        var lapis = new cn.dreamgary.hubsuite.rod.RodData("wood", "string", "string", "lapis", 640, 640);
+        expectBool(wrong, "青金石明细只标「附魔++」", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(lapis)).contains("附魔++"));
+        expectBool(wrong, "青金石明细不暴露附魔细节", false,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(lapis)).contains("15"));
+        // 没有升级时也要有一行（告诉玩家去哪打升级）
+        expectBool(wrong, "无升级时明细里也有升级段", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(plain)).contains("升级"));
+        expectBool(wrong, "中性项隐藏：普通线钩不显示速度行", false,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(plain)).contains("速度: ×1.0"));
+        expectBool(wrong, "整段没效果时写「无属性」（普通线钩）", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(plain)).contains("无属性"));
+        expectBool(wrong, "有变化的项照样显示（钻石升级速度 ×1.5）", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(full)).contains("×1.5"));
+        expectBool(wrong, "tooltip 标出耐烧灼（地狱线）", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(
+                        new cn.dreamgary.hubsuite.rod.RodData("wood", "nether_string", "obsidian", "", 640, 640)))
+                        .contains("耐烧灼"));
+        // 用户要求：不再在 tooltip 里提示"不耐烧灼 ×10"（规则仍在玩法里生效）
+        expectBool(wrong, "岩浆竿 + 普通线 不再提示 ×10", false,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.details(
+                        new cn.dreamgary.hubsuite.rod.RodData("wood", "string", "obsidian", "", 640, 640)))
+                        .contains("×10"));
+        expectBool(wrong, "总体里没升级时标明是「无」", true,
+                join(cn.dreamgary.hubsuite.rod.RodTooltip.summary(plain)).contains("无"));
+
+        // --- 不是我们的竿 → 什么都不加 ---
+        expectInt(wrong, "空数据 → 总体为空", 0, cn.dreamgary.hubsuite.rod.RodTooltip.summary(null).size());
+        expectInt(wrong, "空数据 → 明细为空", 0, cn.dreamgary.hubsuite.rod.RodTooltip.details(null).size());
+        if (cn.dreamgary.hubsuite.rod.RodTooltip.HINT.isBlank()) {
+            wrong.add("Shift 提示文字是空的");
+        }
+
+        if (wrong.isEmpty()) {
+            ok("钓竿提示全对（收起=耐久+材料一览+耐高温+速度/幸运/断线；Shift=一段一个部件、"
+                    + "「属性: 值」、材料按自己的颜色、青金石只标「附魔++」；坏竿有提示、非本模组的竿不加料）");
+        } else {
+            fail("钓竿提示有误：" + String.join("；", wrong));
+        }
+    }
+
+    /** 把若干 Component 拼成一段纯文本，方便断言。 */
+    private static String join(List<net.minecraft.network.chat.Component> lines) {
+        StringBuilder sb = new StringBuilder();
+        for (var line : lines) {
+            sb.append(line.getString()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 耐烧灼规则（用户定的）：能钓岩浆的竿 + **不耐烧灼**的线 → 断线概率 ×10；耐烧灼就照常。
+     *
+     * <p>两种地狱藤蔓是"照抄藤蔓数值、但耐烧灼"的一档，所以这里也一并钉住。
+     */
+    private void checkHeatProof() {
+        List<String> wrong = new ArrayList<>();
+        var materials = cn.dreamgary.hubsuite.rod.RodMaterials.line("vine");
+
+        // --- 材质表：两种地狱藤蔓数值照抄藤蔓、且耐烧灼 ---
+        for (String id : List.of("weeping_vines", "twisting_vines")) {
+            var m = cn.dreamgary.hubsuite.rod.RodMaterials.line(id);
+            expectInt(wrong, id + " 耐久乘数（同藤蔓）", materials.durabilityMul(), m.durabilityMul());
+            expectInt(wrong, id + " 断线‰（同藤蔓）", materials.breakPermille(), m.breakPermille());
+            expectInt(wrong, id + " 速度乘数（同藤蔓）", materials.speedMul(), m.speedMul());
+            expectBool(wrong, id + " 耐烧灼", true, m.heatProof());
+        }
+        expectBool(wrong, "藤蔓不耐烧灼", false, cn.dreamgary.hubsuite.rod.RodMaterials.line("vine").heatProof());
+        expectBool(wrong, "地狱线耐烧灼", true,
+                cn.dreamgary.hubsuite.rod.RodMaterials.line("nether_string").heatProof());
+        expectBool(wrong, "普通线不耐烧灼", false,
+                cn.dreamgary.hubsuite.rod.RodMaterials.line("string").heatProof());
+
+        // --- 规则：只能钓岩浆的竿上才 ×10 ---
+        var lavaString = new cn.dreamgary.hubsuite.rod.RodData("wood", "string", "obsidian", "", 640, 640);
+        expectBool(wrong, "黑曜石钩 → 这根竿能钓岩浆", true, lavaString.lavaCapable());
+        expectInt(wrong, "岩浆竿 + 普通线（5‰）→ ×10 = 50‰", 50, lavaString.breakPermille());
+
+        var normalString = new cn.dreamgary.hubsuite.rod.RodData("wood", "string", "string", "", 640, 640);
+        expectInt(wrong, "不能钓岩浆 + 普通线 → 照常 5‰", 5, normalString.breakPermille());
+
+        var lavaNether = new cn.dreamgary.hubsuite.rod.RodData("wood", "nether_string", "obsidian", "", 640, 640);
+        expectInt(wrong, "岩浆竿 + 地狱线（耐烧灼）→ 照常 7‰", 7, lavaNether.breakPermille());
+
+        var lavaWeeping = new cn.dreamgary.hubsuite.rod.RodData("wood", "weeping_vines", "obsidian", "", 640, 640);
+        expectInt(wrong, "岩浆竿 + 垂泪藤（耐烧灼）→ 照常 2‰", 2, lavaWeeping.breakPermille());
+
+        var lavaVine = new cn.dreamgary.hubsuite.rod.RodData("wood", "vine", "obsidian", "", 640, 640);
+        expectInt(wrong, "岩浆竿 + 藤蔓（不耐烧灼）→ ×10 = 20‰", 20, lavaVine.breakPermille());
+
+        if (wrong.isEmpty()) {
+            ok("耐烧灼规则 11 组全对（地狱藤蔓照抄藤蔓数值且耐烧灼；岩浆竿 + 不耐烧灼的线断线 ×10，"
+                    + "耐烧灼照常；不能钓岩浆的竿不受影响）");
+        } else {
+            fail("耐烧灼规则有误：" + String.join("；", wrong));
         }
     }
 
@@ -2906,11 +3579,11 @@ public final class SelfTest {
             } else {
                 ok("自定义配方全是原版类型，客户端 JEI 的配方转移可直接处理");
             }
-            var invisible = cn.dreamgary.hubsuite.integration.JeiIntegration.recipesWithInvisibleItems(server);
-            if (!invisible.isEmpty()) {
-                fail("配方里引用了原版客户端看不到的物品：" + invisible);
+            var unknown = cn.dreamgary.hubsuite.integration.JeiIntegration.recipesWithUnknownItems(server);
+            if (!unknown.isEmpty()) {
+                fail("配方引用了未注册的物品：" + unknown);
             } else {
-                ok("配方里的自定义物品全是 PolymerItem，原版客户端 / JEI 都能看到配方");
+                ok("配方引用的自定义物品全部已注册（客户端强制安装，JEI 里都能看到）");
             }
         }
     }
@@ -3438,7 +4111,7 @@ public final class SelfTest {
             "hubsuite_selftest", "hubsuite_islandtest", "hubsuite_spawntest",
             "hubsuite_statetest", "hubsuite_spawnprobe", "hubsuite_menutest",
             "hubsuite_persist", "hubsuite_memtest", "hubsuite_mount", "hubsuite_switch",
-            "hubsuite_buckettest");
+            "hubsuite_buckettest", "hubsuite_anvil");
 
     /**
      * 清掉假玩家的**位置记忆**。
@@ -6989,9 +7662,9 @@ public final class SelfTest {
         var oceanNetherLevel = oceanNether == null ? null
                 : skyblock.entryOf(oceanNether).map(SubServer.Entry::level).orElse(null);
         if (oceanNetherLevel != null) {
-            okOrFail(oceanNetherLevel.getSeaLevel() >= 90,
+            okOrFail(oceanNetherLevel.getSeaLevel() == LavaSeaGenerator.LAVA_SEA_LEVEL,
                     "海岛下界是岩浆海（液面 Y=" + oceanNetherLevel.getSeaLevel()
-                            + "，原版下界是 32）",
+                            + "，无顶层基岩，原版下界是 32）",
                     "海岛下界的液面是 " + oceanNetherLevel.getSeaLevel()
                             + " —— 岩浆海预设没生效（可能回落成了原版或虚空）");
         } else {

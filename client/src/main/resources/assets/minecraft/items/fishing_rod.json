@@ -10,7 +10,7 @@
           "type": "minecraft:select",
           "property": "minecraft:custom_model_data",
           "index": 0,
-          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown" },
+          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown_rod" },
           "cases": [
             { "when": "wood", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/rod_wood" } },
             { "when": "iron", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/rod_iron" } },
@@ -19,21 +19,44 @@
           ]
         },
         {
+          "type": "minecraft:condition",
+          "property": "minecraft:fishing_rod/cast",
+          "on_true": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "index": 1,
+            "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_string_cast" },
+            "cases": [
+              { "when": "string", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_string_cast" } },
+              { "when": "nether_string", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_nether_string_cast" } },
+              { "when": "vine", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_vine_cast" } },
+              { "when": "weeping_vines", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_weeping_vines_cast" } },
+              { "when": "twisting_vines", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_twisting_vines_cast" } }
+            ]
+          },
+          "on_false": {
           "type": "minecraft:select",
           "property": "minecraft:custom_model_data",
           "index": 1,
-          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown" },
+          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown_line" },
           "cases": [
             { "when": "string", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_string" } },
             { "when": "nether_string", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_nether_string" } },
-            { "when": "vine", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_vine" } }
+            { "when": "vine", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_vine" } },
+            { "when": "weeping_vines", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_weeping_vines" } },
+            { "when": "twisting_vines", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/line_twisting_vines" } }
           ]
+          }
         },
         {
+          "type": "minecraft:condition",
+          "property": "minecraft:fishing_rod/cast",
+          "on_true": { "type": "minecraft:empty" },
+          "on_false": {
           "type": "minecraft:select",
           "property": "minecraft:custom_model_data",
           "index": 2,
-          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown" },
+          "fallback": { "type": "minecraft:model", "model": "hubsuite:item/rod/unknown_hook" },
           "cases": [
             { "when": "string", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/hook_string" } },
             { "when": "iron", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/hook_iron" } },
@@ -41,24 +64,35 @@
             { "when": "obsidian", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/hook_obsidian" } },
             { "when": "netherite", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/hook_netherite" } }
           ]
-        },
-        {
-          "type": "minecraft:select",
-          "property": "minecraft:custom_model_data",
-          "index": 3,
-          "fallback": { "type": "minecraft:empty" },
-          "cases": [
-            { "when": "diamond", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_diamond" } },
-            { "when": "emerald", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_emerald" } },
-            { "when": "lapis", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_lapis" } },
-            { "when": "redstone", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_redstone" } }
-          ]
+          }
         },
         {
           "type": "minecraft:condition",
           "property": "minecraft:fishing_rod/cast",
-          "on_true": { "type": "minecraft:model", "model": "hubsuite:item/rod/cast_line" },
-          "on_false": { "type": "minecraft:empty" }
+          "on_true": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "index": 3,
+            "fallback": { "type": "minecraft:empty" },
+            "cases": [
+              { "when": "diamond", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_diamond_cast" } },
+              { "when": "emerald", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_emerald_cast" } },
+              { "when": "lapis", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_lapis_cast" } },
+              { "when": "redstone", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_redstone_cast" } }
+            ]
+          },
+          "on_false": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "index": 3,
+            "fallback": { "type": "minecraft:empty" },
+            "cases": [
+              { "when": "diamond", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_diamond_cover" } },
+              { "when": "emerald", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_emerald_cover" } },
+              { "when": "lapis", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_lapis_cover" } },
+              { "when": "redstone", "model": { "type": "minecraft:model", "model": "hubsuite:item/rod/up_redstone_cover" } }
+            ]
+          }
         },
         {
           "type": "minecraft:select",
@@ -71,6 +105,11 @@
         }
       ]
     },
-    "on_false": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod" }
+    "on_false": {
+      "type": "minecraft:condition",
+      "property": "minecraft:fishing_rod/cast",
+      "on_true": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod_cast" },
+      "on_false": { "type": "minecraft:model", "model": "minecraft:item/fishing_rod" }
+    }
   }
 }

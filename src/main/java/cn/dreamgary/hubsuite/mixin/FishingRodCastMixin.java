@@ -45,9 +45,26 @@ public abstract class FishingRodCastMixin {
         if (hook == null) {
             return;
         }
-        // 能不能钓岩浆，看的是**这根竿挂的钩**（0.6 起取消了专用竿）
+        // 能不能钓岩浆，看的是**这根竿挂的钩**（服务端记录钩子本身耐岩浆属性；同步客户端时再结合当前维度渔获表）
         cn.dreamgary.hubsuite.rod.RodData data =
                 cn.dreamgary.hubsuite.rod.RodData.of(player.getItemInHand(hand));
-        ((LavaFishingHook) hook).hubsuite$setLavaCapable(data != null && data.lavaCapable());
+        boolean rodLava = data != null && data.lavaCapable();
+        ((LavaFishingHook) hook).hubsuite$setLavaCapable(rodLava);
+        boolean clientLava = rodLava
+                && cn.dreamgary.hubsuite.feature.FishingLoot.tableFor(
+                        cn.dreamgary.hubsuite.HubSuite.fishing(), level.dimension()) != null;
+        if (!level.isClientSide() && clientLava) {
+            var pkt = new cn.dreamgary.hubsuite.net.LavaHookSyncPayload.LavaHookSync(hook.getId(), true);
+            if (player instanceof net.minecraft.server.level.ServerPlayer sp
+                    && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(sp, pkt.type())) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(sp, pkt);
+            }
+            for (var watcher : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(hook)) {
+                if (watcher != player
+                        && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(watcher, pkt.type())) {
+                    net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(watcher, pkt);
+                }
+            }
+        }
     }
 }

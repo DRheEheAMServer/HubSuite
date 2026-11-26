@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " A ",
+    "RSR",
+    "   "
+  ],
+  "key": {
+    "R": "hubsuite:refined_bait",
+    "A": "minecraft:amethyst_shard",
+    "S": "minecraft:slime_ball"
+  },
+  "result": {
+    "id": "hubsuite:twin_bait",
+    "count": 2
+  }
+}

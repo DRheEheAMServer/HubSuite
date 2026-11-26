@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " B ",
+    "BGB",
+    " M "
+  ],
+  "key": {
+    "B": "hubsuite:basic_bait",
+    "G": "minecraft:glow_ink_sac",
+    "M": "minecraft:bone_meal"
+  },
+  "result": {
+    "id": "hubsuite:refined_bait",
+    "count": 4
+  }
+}

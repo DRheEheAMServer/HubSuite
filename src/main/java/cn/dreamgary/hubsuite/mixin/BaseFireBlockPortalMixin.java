@@ -41,13 +41,8 @@ public abstract class BaseFireBlockPortalMixin {
         }
         try {
             var dimension = level.dimension();
-            // 我们自己造的下界/末地（例如 hubsuite:survival_nether）
-            if (PortalLinks.isExtraDimension(dimension)) {
-                return true;
-            }
-            // 子服的"主维度"（hubsuite:server_survival 等）—— 它们不在
-            // PortalLinks 的两个反向表里，所以单独问一句
-            return PortalLinks.isSubServerDimension(dimension);
+            // 仅允许子服主维度与其下界维度点燃下界传送门（绝不放行末地维度）
+            return PortalLinks.isNetherPortalDimension(dimension);
         } catch (Throwable t) {
             return original;
         }

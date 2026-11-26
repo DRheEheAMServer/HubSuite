@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " G ",
+    "RLR",
+    " G "
+  ],
+  "key": {
+    "R": "hubsuite:refined_bait",
+    "G": "minecraft:gold_ingot",
+    "L": "minecraft:lapis_lazuli"
+  },
+  "result": {
+    "id": "hubsuite:treasure_bait",
+    "count": 2
+  }
+}

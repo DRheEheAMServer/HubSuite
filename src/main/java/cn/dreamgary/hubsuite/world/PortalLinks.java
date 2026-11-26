@@ -108,6 +108,10 @@ public final class PortalLinks {
             if (back != null) {
                 return back;
             }
+            // 兜底防逃逸：受管维度（含末地/无下界的子服）绝不跳往原版共享下界
+            if (isManagedDimension(from)) {
+                return null;
+            }
         } else if (Level.END.equals(vanillaTarget)) {
             ResourceKey<Level> own = END_OF.get(from);
             if (own != null) {
@@ -117,8 +121,49 @@ public final class PortalLinks {
             if (back != null) {
                 return back;
             }
+            // 兜底防逃逸：受管维度（含下界/无末地的子服）绝不跳往原版共享末地
+            if (isManagedDimension(from)) {
+                return null;
+            }
+        } else if (Level.OVERWORLD.equals(vanillaTarget)) {
+            // 从子服末地返回泉水（或从子服下界回主世界）→ 回到归属的子服主维度
+            ResourceKey<Level> endBack = END_BACK.get(from);
+            if (endBack != null) {
+                return endBack;
+            }
+            ResourceKey<Level> netherBack = NETHER_BACK.get(from);
+            if (netherBack != null) {
+                return netherBack;
+            }
         }
         return vanillaTarget;
+    }
+
+    /** 若该维度是子服的下界/末地侧维度，返回它归属的父主维度；否则原样返回。 */
+    public static ResourceKey<Level> parentOverworld(ResourceKey<Level> dimension) {
+        if (dimension == null) {
+            return null;
+        }
+        ResourceKey<Level> parent = NETHER_BACK.get(dimension);
+        if (parent != null) {
+            return parent;
+        }
+        parent = END_BACK.get(dimension);
+        return parent != null ? parent : dimension;
+    }
+
+    /** 是否属于本模组通过 PortalLinks 托管的维度（主维度或侧维度）。 */
+    public static boolean isManagedDimension(ResourceKey<Level> dimension) {
+        return dimension != null
+                && (SUB_DIMENSIONS.contains(dimension)
+                || NETHER_BACK.containsKey(dimension)
+                || END_BACK.containsKey(dimension));
+    }
+
+    /** 是否允许点燃下界传送门（仅子服主维度与其下界维度，不含末地）。 */
+    public static boolean isNetherPortalDimension(ResourceKey<Level> dimension) {
+        return dimension != null
+                && (SUB_DIMENSIONS.contains(dimension) || NETHER_BACK.containsKey(dimension));
     }
 
     /**

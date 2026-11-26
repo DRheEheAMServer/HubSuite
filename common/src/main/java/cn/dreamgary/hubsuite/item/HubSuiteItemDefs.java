@@ -18,8 +18,8 @@ import net.minecraft.world.item.Rarity;
  * 显示的就会跟服务端不是同一个东西。所以两端的 {@code Item.Properties}
  * 必须来自同一份定义 —— 这份定义就放在 {@code common/}，两个 jar 各编译一份。
  *
- * <p>服务端在此之上用 Polymer 的子类（原版客户端映射成 {@code minecraft:trial_key}）；
- * 客户端注册成普通 {@code Item}（自己渲染真物品）。
+ * <p>0.6 收尾起 Polymer 已下线：两端都注册成普通 {@code Item}，客户端用自己的素材渲染真物品。
+ * （历史：0.4~0.5 服务端曾用 Polymer 子类映射给原版客户端。）
  */
 public final class HubSuiteItemDefs {
 
@@ -50,10 +50,23 @@ public final class HubSuiteItemDefs {
     public static final Def IRON_FISHING_BUCKET = new Def("iron_fishing_bucket", 1, Rarity.UNCOMMON, 0);
     public static final Def DIAMOND_FISHING_BUCKET = new Def("diamond_fishing_bucket", 1, Rarity.RARE, 0);
 
+    /** 水钓 3 档钓饵 + 岩浆 3 档钓饵 + 2 种功能型通用钓饵。 */
+    public static final Def BASIC_BAIT = new Def("basic_bait", 64, Rarity.COMMON, 0);
+    public static final Def REFINED_BAIT = new Def("refined_bait", 64, Rarity.UNCOMMON, 0);
+    public static final Def ABYSSAL_BAIT = new Def("abyssal_bait", 64, Rarity.RARE, 0);
+    public static final Def EMBER_BAIT = new Def("ember_bait", 64, Rarity.COMMON, 0);
+    public static final Def MAGMA_BAIT = new Def("magma_bait", 64, Rarity.UNCOMMON, 0);
+    public static final Def INFERNAL_BAIT = new Def("infernal_bait", 64, Rarity.RARE, 0);
+    public static final Def TREASURE_BAIT = new Def("treasure_bait", 64, Rarity.RARE, 0);
+    public static final Def TWIN_BAIT = new Def("twin_bait", 64, Rarity.RARE, 0);
+
     /** 全部物品（顺序即注册顺序）。 */
     public static final List<Def> ALL = List.of(
             NETHER_STRING, LAVA_ROD,
-            WOODEN_FISHING_BUCKET, IRON_FISHING_BUCKET, DIAMOND_FISHING_BUCKET);
+            WOODEN_FISHING_BUCKET, IRON_FISHING_BUCKET, DIAMOND_FISHING_BUCKET,
+            BASIC_BAIT, REFINED_BAIT, ABYSSAL_BAIT,
+            EMBER_BAIT, MAGMA_BAIT, INFERNAL_BAIT,
+            TREASURE_BAIT, TWIN_BAIT);
 
     private HubSuiteItemDefs() {
     }
@@ -71,7 +84,7 @@ public final class HubSuiteItemDefs {
                 .component(DataComponents.ITEM_NAME, def.name())
                 // 遗留别名没有自己的素材，模型直接指回原版钓竿（两端一致，素材检查会跳过它们）
                 .component(DataComponents.ITEM_MODEL,
-                        isLegacyAlias(def) ? Identifier.withDefaultNamespace("item/fishing_rod") : def.id());
+                        isLegacyAlias(def) ? Identifier.withDefaultNamespace("fishing_rod") : def.id());
         if (def.durability() > 0) {
             props = props.durability(def.durability());
         }

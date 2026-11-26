@@ -8,6 +8,7 @@
     "BaseFireBlockPortalMixin",
     "CommonPlayerSpawnInfoMixin",
     "FishingHookAccessor",
+    "ItemCombinerMenuAccessor",
     "FishingHookMixin",
     "FishingRodCastMixin",
     "ConnectionChannelAccessor",
@@ -24,6 +25,7 @@
     "PlayerInfoListedMixin",
     "PlayerListStorageMixin",
     "PortalBlockDestinationMixin",
+    "RodDurabilityMixin",
     "PrepareSpawnTaskMixin",
     "ServerCommonPacketListenerMixin",
     "ServerGamePacketListenerMenuMixin",
@@ -32,7 +34,8 @@
     "ServerLevelSeedMixin",
     "ServerPlayerRespawnDimensionMixin",
     "StructureTemplatePaletteCacheMixin",
-    "BlockItemPlaceMixin"
+    "BlockItemPlaceMixin",
+    "VoidErosionChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 1
